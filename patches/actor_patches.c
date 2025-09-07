@@ -45,7 +45,7 @@ RECOMP_PATCH ActorMarker * marker_init(s32 *pos, MarkerDrawFunc draw_func, int a
     marker->actrArrayIdx = 0;
     marker->unk14_10 = 0;
     marker->modelId = 0;
-    marker->unk3E_1 = 0;
+    marker->isBanjoOnTop = 0;
     marker->unk14_22 = 0;
     marker->unk14_21 = 0;
     marker->yaw = 0;
@@ -66,7 +66,7 @@ RECOMP_PATCH ActorMarker * marker_init(s32 *pos, MarkerDrawFunc draw_func, int a
     marker->unk18 = 0;
     marker->actorUpdateFunc = NULL;
     marker->actorFreeFunc = NULL;
-    marker->unk28 = 0;
+    marker->commonParticleIndex = 0;
     marker->actorUpdate2Func = NULL;
     marker->unk38[0] = 0;
     marker->unk38[1] = 0;
