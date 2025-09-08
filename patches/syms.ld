@@ -33,3 +33,4 @@ __umoddi3_recomp = 0x8F000070;
 strlen_recomp = 0x8F000074;
 osVirtualToPhysical_recomp = 0x8F000078;
 osPiStartDma_recomp = 0x8F00007C;
+recomp_abort = 0x8F000080;

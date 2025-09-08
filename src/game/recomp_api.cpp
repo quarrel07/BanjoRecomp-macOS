@@ -212,3 +212,10 @@ extern "C" void recomp_load_overlays_by_rom(uint8_t* rdram, recomp_context* ctx)
 
     load_overlays(rom_addr, ram_addr, size);
 }
+
+extern "C" void recomp_abort(uint8_t* rdram, recomp_context* ctx) {
+    std::string msg = _arg_string<0>(rdram, ctx);
+    recompui::message_box(msg.c_str());
+    assert(false);
+    ultramodern::error_handling::quick_exit(__FILE__, __LINE__, __FUNCTION__);
+}
