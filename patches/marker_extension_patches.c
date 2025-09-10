@@ -5,11 +5,6 @@
 #include "object_extension_funcs.h"
 #include "bk_api.h"
 
-typedef enum {
-    EXTENSION_TYPE_MARKER,
-    EXTENSION_TYPE_PROP,
-} ExtensionType;
-
 // Array of handles for ActorMarker instances.
 // Normally the game only has at most 0xE0 ActorMarker instances, but this is larger to account for mods increasing
 // the ActorMarker count.
