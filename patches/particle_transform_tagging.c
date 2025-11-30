@@ -1,0 +1,226 @@
+#include "patches.h"
+#include "transform_ids.h"
+#include "functions.h"
+#include "rand.h"
+#include "core1/ml.h"
+#include "core2/anctrl.h"
+#include "core2/modelRender.h"
+#include "core2/particle.h"
+#include "core2/timedfunc.h"
+
+// 2 bytes of padding between alpha and particleAccerationRange_4C. Must be at least 16-bit to fit the full range of PARTICLE_EMITTER_MAX_ID.
+#define PARTICLE_EMITTER_ID(x) (*(u16*)&((x)->pad4A))
+
+// 2 bytes of padding between unk104 and unk108. Must be at least 16-bit to fit the full range of PARTICLE_EMITTER_TRANSFORM_ID_COUNT.
+#define PARTICLE_EMITTER_SPAWN_COUNT(x) (*(u16*)&((x)->pad106))
+
+// 2 bytes of padding after unk5C (skipping 1 byte for alignment). Must be at least as bit as the emitter spawn count field.
+#define PARTICLE_ID(x) (*(u16*)&(&(x)->unk5C)[2])
+
+u32 particle_emitter_spawn_count = 0;
+
+extern ParticleEmitter **partEmitMgr;
+extern s32 partEmitMgrLength;
+
+typedef struct particle{
+    f32 acceleration[3];
+    f32 fade;
+    f32 frame; //frame
+    f32 framerate; //framerate
+    f32 position[3];
+    f32 rotation[3];
+    f32 scale; //size
+    f32 initialSize_34; //initial_size
+    f32 finalSizeDiff; //delta_size
+    f32 angluar_velocity[3];
+    f32 age_48;
+    f32 lifetime_4C;
+    f32 velocity_50[3];
+    u8 unk5C;
+    //u8 pad5D[3];
+} Particle;
+
+extern Gfx D_80368978[];
+extern Gfx D_80368940[];
+
+void __particleEmitter_drawOnPass(ParticleEmitter *this, Gfx **gfx, Mtx **mtx, Vtx **vtx, u32 draw_pass);
+void func_803382E4(s32);
+void func_80338338(s32, s32, s32);
+void func_803382B4(s32 arg0, s32 arg1, s32 arg2, s32 arg3);
+void func_80338370(void);
+void func_80335D30(Gfx **);
+void func_802EED1C(ParticleEmitter *this, f32 age, f32 arg2[3]);
+void func_80344C2C(bool arg0);
+void func_80344720(BKSpriteDisplayData *arg0, s32 frame, bool mirrored, f32 position[3], f32 rotation[3], f32 scale[3], Gfx **gfx, Mtx **mtx);
+void func_80344424(BKSpriteDisplayData *arg0, s32 frame, bool mirrored, f32 position[3], f32 scale[3], f32 rotation, Gfx **gfx, Mtx **mtx);
+void func_8033687C(Gfx **);
+
+// @recomp Patched to tag particles as they're drawn.
+RECOMP_PATCH void __particleEmitter_drawOnPass(ParticleEmitter *this, Gfx **gfx, Mtx **mtx, Vtx **vtx, u32 draw_pass){
+    f32 position[3];
+    f32 flat_rotation[3];
+    f32 scale[3];
+    Particle *iPtr;
+
+    // @recomp Get the particle emitter's ID.
+    u32 cur_particle_emitter_index = PARTICLE_EMITTER_ID(this);
+
+    if(reinterpret_cast(u32, draw_pass) != (this->draw_mode & 0x4) != 0)
+        return;
+
+    if(this->model_20 != NULL){
+        for(iPtr = this->pList_start_124; iPtr < this->pList_end_128; iPtr++){
+            position[0] = iPtr->position[0] + this->unk4[0];
+            position[1] = iPtr->position[1] + this->unk4[1];
+            position[2] = iPtr->position[2] + this->unk4[2];
+            if( 0.0f != this->fade_in || 1.0 != this->fade_out || this->alpha != 0xff ){
+                modelRender_setAlpha((s32) (iPtr->fade*this->alpha));
+            }//L802EEF5C
+            modelRender_setDepthMode((this->draw_mode & PART_EMIT_NO_DEPTH)? MODEL_RENDER_DEPTH_NONE : MODEL_RENDER_DEPTH_FULL);
+            // @recomp Get the particle's ID. Restrict it to the model particle emitter ID count to account for the smaller number of base transform IDs for
+            // model particle emitters.
+            u32 particle_id = PARTICLE_ID(iPtr) % PARTICLE_EMITTER_MODEL_ID_COUNT;
+            // @recomp Set the current model transform ID. Divide the total per-emitter transform ID count by the per-model transform ID count to get the
+            // base transform ID for the current model particle.
+            cur_drawn_model_transform_id =
+                PARTICLE_TRANSFORM_ID_START +
+                PARTICLE_EMITTER_TRANSFORM_ID_COUNT * cur_particle_emitter_index + 
+                particle_id * PARTICLE_EMITTER_MODEL_ID_COUNT;
+            modelRender_draw(gfx, mtx, position, iPtr->rotation, iPtr->scale, NULL, this->model_20);
+            // @recomp Reset the current model transform ID.
+            cur_drawn_model_transform_id = 0;
+        }
+        return;
+    }
+    
+    if(this->unk34){//L802EEFC4
+        if( this->rgb[0] != 0xff 
+            || this->rgb[1] != 0xff 
+            || this->rgb[2] != 0xff 
+            || this->alpha != 0xff 
+        ){
+            func_803382E4((this->draw_mode & PART_EMIT_NO_DEPTH)? 9: 0xf);
+            func_80338338(this->rgb[0], this->rgb[1], this->rgb[2]);
+            func_803382B4(
+                (this->rgb[0] < 8)? 0 : this->rgb[0] - 8,
+                (this->rgb[1] < 8)? 0 : this->rgb[1] - 8,
+                (this->rgb[2] < 8)? 0 : this->rgb[2] - 8,
+                (this->draw_mode & PART_EMIT_NO_OPA)? 0xff : this->alpha
+            );
+            func_80338370();
+            func_80335D30(gfx);
+        }
+        else if(this->draw_mode & PART_EMIT_NO_DEPTH){//L802EF0C0
+            gSPDisplayList((*gfx)++, D_80368978);
+        }
+        else{//L802EF0EC
+            gSPDisplayList((*gfx)++, D_80368940);
+        }//L802EF10C
+        flat_rotation[0] = 90.0f;
+        flat_rotation[1] = 0.0f;
+        flat_rotation[2] = 0.0f;
+        for(iPtr = this->pList_start_124; iPtr < this->pList_end_128; iPtr++){
+            gDPSetPrimColor((*gfx)++, 0, 0, this->rgb[0], this->rgb[1], this->rgb[2], iPtr->fade*this->alpha);
+            position[0] = iPtr->position[0] + this->unk4[0];
+            position[1] = iPtr->position[1] + this->unk4[1];
+            position[2] = iPtr->position[2] + this->unk4[2];
+
+            scale[0] = iPtr->scale;
+            scale[1] = iPtr->scale;
+            scale[2] = iPtr->scale;
+            if(0.0f != this->unk108){
+                func_802EED1C(this, iPtr->age_48, scale);
+            }
+            func_80344C2C(this->unk0_16);
+            // @recomp Set the matrix group for this particle.
+            u32 transform_id = 
+                PARTICLE_TRANSFORM_ID_START +
+                PARTICLE_EMITTER_TRANSFORM_ID_COUNT * cur_particle_emitter_index + 
+                PARTICLE_ID(iPtr);
+            gEXMatrixGroupDecomposedNormal((*gfx)++, transform_id, G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
+
+            if(this->draw_mode & PART_EMIT_ROTATABLE){
+                func_80344720(this->unk34, (s32)iPtr->frame, 0, position, flat_rotation, scale, gfx, mtx);
+            }//L802EF2F8
+            else{
+                func_80344424(this->unk34, (s32)iPtr->frame, 0, position, scale, iPtr->rotation[2], gfx, mtx);
+            }//L802EF324
+
+            // @recomp Pop the particle's matrix group.
+            gEXPopMatrixGroup((*gfx)++, G_MTX_MODELVIEW);
+        }//L802EF338
+        if( this->rgb[0] != 0xff || this->rgb[1] != 0xff || this->rgb[2] != 0xff || this->alpha != 0xff 
+        ){
+            func_8033687C(gfx);
+        }
+    }
+}
+
+// @recomp Patched to set an incrementing ID for the emitter.
+RECOMP_PATCH ParticleEmitter *partEmitMgr_newEmitter(u32 cnt){
+    partEmitMgr = realloc(partEmitMgr, (++partEmitMgrLength)*4);
+    partEmitMgr[partEmitMgrLength - 1] = particleEmitter_new(cnt);
+    partEmitMgr[partEmitMgrLength - 1]->auto_free = TRUE;
+    // @recomp Set the particle emitter's ID based on the emitter spawn count and increment the spawn count.
+    PARTICLE_EMITTER_ID(partEmitMgr[partEmitMgrLength - 1]) = particle_emitter_spawn_count;
+    particle_emitter_spawn_count++;
+    particle_emitter_spawn_count = particle_emitter_spawn_count % PARTICLE_EMITTER_MAX_ID;
+
+    return partEmitMgr[partEmitMgrLength - 1];
+}
+
+// @recomp Patched to set an incrementing ID for the particle.
+RECOMP_PATCH void __particleEmitter_initParticle(ParticleEmitter *this, Particle *particle){
+    particle->acceleration[0] = randf2(this->particleAccerationRange_4C_min_x, this->particleAccerationRange_4C_max_x);
+    particle->acceleration[1] = randf2(this->particleAccerationRange_4C_min_y, this->particleAccerationRange_4C_max_y);
+    particle->acceleration[2] = randf2(this->particleAccerationRange_4C_min_z, this->particleAccerationRange_4C_max_z);
+    particle->unk5C = this->unk64;
+    
+    particle->fade = (0.0f == this->fade_in) ? 1.0f : 0; 
+    particle->frame = randf2((f32)this->particleStartingFrameRange_84_min, (f32)this->particleStartingFrameRange_84_max);
+    particle->framerate = randf2(this->particleFramerateRange_8C_min, this->particleFramerateRange_8C_max);
+
+    particle->position[0] = this->postion_28[0];
+    particle->position[1] = this->postion_28[1];
+    particle->position[2] = this->postion_28[2];
+
+    particle->position[0] = particle->position[0] + randf2(this->particleSpawnPositionRange_94_min_x, this->particleSpawnPositionRange_94_max_x);
+    particle->position[1] = particle->position[1] + randf2(this->particleSpawnPositionRange_94_min_y, this->particleSpawnPositionRange_94_max_y);
+    particle->position[2] = particle->position[2] + randf2(this->particleSpawnPositionRange_94_min_z, this->particleSpawnPositionRange_94_max_z);
+
+    particle->initialSize_34 = particle->scale = randf2(this->particleStartingScaleRange_AC_min, this->particleStartingScaleRange_AC_max);
+    if(0.0f == this->particleFinalScaleRange_B4_min && 0.0f == this->particleFinalScaleRange_B4_max)
+        particle->finalSizeDiff = 0.0f;
+    else
+        particle->finalSizeDiff = randf2(this->particleFinalScaleRange_B4_min, this->particleFinalScaleRange_B4_max)- particle->initialSize_34;
+
+    particle->rotation[2] = 0.0f;
+    particle->rotation[1] = 0.0f;
+    particle->rotation[0] = 0.0f;
+
+    particle->angluar_velocity[0] = randf2(this->unkBC[0], this->unkC8[0]);
+    particle->angluar_velocity[1] = randf2(this->unkBC[1], this->unkC8[1]);
+    particle->angluar_velocity[2] = randf2(this->unkBC[2], this->unkC8[2]);
+    
+    particle->age_48 = 0.0f;
+    particle->lifetime_4C = randf2(this->particleLifeTimeRange[0], this->particleLifeTimeRange[1]) + 0.001;
+    if(!this->sphericalParticleVelocity_48){
+        particle->velocity_50[0] = randf2(this->particleVelocityRange_E4.cartisian_min_x, this->particleVelocityRange_E4.cartisian_max_x);
+        particle->velocity_50[1] = randf2(this->particleVelocityRange_E4.cartisian_min_y, this->particleVelocityRange_E4.cartisian_max_y);
+        particle->velocity_50[2] = randf2(this->particleVelocityRange_E4.cartisian_min_z, this->particleVelocityRange_E4.cartisian_max_z);
+    }
+    else{
+        func_80256E24(particle->velocity_50, 
+            mlNormalizeAngle(randf2(this->particleVelocityRange_E4.spherical.pitch_min, this->particleVelocityRange_E4.spherical.pitch_max)),
+            mlNormalizeAngle(randf2(this->particleVelocityRange_E4.spherical.yaw_min, this->particleVelocityRange_E4.spherical.yaw_max)),
+            0.0f,
+            0.0f,
+            randf2(this->particleVelocityRange_E4.spherical.radius_min, this->particleVelocityRange_E4.spherical.radius_max)
+        );
+    }
+    
+    // @recomp Set the particle's ID based on the particle emitters's spawn count.
+    PARTICLE_ID(particle) = PARTICLE_EMITTER_SPAWN_COUNT(this);
+    // @recomp Increment the particle emitter's spawn count.
+    PARTICLE_EMITTER_SPAWN_COUNT(this)++;
+}
