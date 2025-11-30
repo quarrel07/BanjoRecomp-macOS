@@ -79,4 +79,7 @@ void memcpy(void * dst, void *src, int size);
 char* strchr(const char* s, int c);
 int recomp_printf(const char* fmt, ...);
 
+void set_additional_model_scale(f32 x, f32 y, f32 z);
+void set_frustum_checks_enabled(int enabled);
+
 #endif

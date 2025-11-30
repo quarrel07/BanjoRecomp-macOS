@@ -6,7 +6,19 @@
 #include "core1/mlmtx.h"
 #include "functions.h"
 
-u32 cur_drawn_model_transform_id = 0;
+bool has_additional_model_scale = FALSE;
+f32 additional_model_scale_x;
+f32 additional_model_scale_y;
+f32 additional_model_scale_z;
+
+void set_additional_model_scale(f32 x, f32 y, f32 z) {
+    has_additional_model_scale = TRUE;
+    additional_model_scale_x = x;
+    additional_model_scale_y = y;
+    additional_model_scale_z = z;
+}
+
+s32 cur_drawn_model_transform_id = 0;
 
 typedef void (*GeoListFunc)(Gfx **, Mtx **, void *);
 
@@ -32,12 +44,6 @@ void func_802ED52C(BKModelUnk20List *arg0, f32 arg1[3], f32 arg2);
 void func_802E6BD0(BKModelUnk28List *arg0, BKVertexList *arg1, AnimMtxList *mtx_list);
 void assetCache_free(void *arg0);
 
-#define gEXMatrixGroupSimpleNormal(cmd, id, push, proj, edit) \
-    gEXMatrixGroup(cmd, id, G_EX_INTERPOLATE_SIMPLE, push, proj, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_LINEAR, edit, G_EX_ASPECT_AUTO)
-    
-#define gEXMatrixGroupSimpleVerts(cmd, id, push, proj, edit) \
-    gEXMatrixGroup(cmd, id, G_EX_INTERPOLATE_SIMPLE, push, proj, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_LINEAR, edit, G_EX_ASPECT_AUTO)
-
 // @recomp Patched to set matrix groups when processing geo bones.
 RECOMP_PATCH void func_803387F8(Gfx **gfx, Mtx **mtx, void *arg2){
     GeoCmd2 *cmd = (GeoCmd2 *)arg2;
@@ -48,11 +54,16 @@ RECOMP_PATCH void func_803387F8(Gfx **gfx, Mtx **mtx, void *arg2){
             mlMtxApply(*mtx);
             gSPMatrix((*gfx)++, (*mtx)++, G_MTX_PUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
 
-            if (cur_drawn_model_transform_id != 0) {
+            if (cur_drawn_model_transform_id == -1) {
+                // @recomp Skip interpolation if the transform id is -1.
+                gEXMatrixGroupNoInterpolate((*gfx)++, G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
+            }
+            else if (cur_drawn_model_transform_id != 0) {
                 // @recomp Tag the matrix.
-                // gEXMatrixGroupSimpleNormal((*gfx)++, cur_drawn_actor_transform_id + cmd->unk9, G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
+                // gEXMatrixGroupSimpleNormal((*gfx)++, cur_drawn_model_transform_id + cmd->unk9, G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
                 gEXMatrixGroupSimpleVerts((*gfx)++, cur_drawn_model_transform_id + cmd->unk9, G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
-                // gEXMatrixGroupDecomposedNormal((*gfx)++, cur_drawn_actor_transform_id + cmd->unk9 + 1, G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
+                // gEXMatrixGroupDecomposedNormal((*gfx)++, cur_drawn_model_transform_id + cmd->unk9, G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
+                // gEXMatrixGroupDecomposedVerts((*gfx)++, cur_drawn_model_transform_id + cmd->unk9, G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
             }
         }
     }
@@ -255,7 +266,14 @@ RECOMP_PATCH BKModelBin *modelRender_draw(Gfx **gfx, Mtx **mtx, f32 position[3],
         return 0;
     }
 
+    // @recomp Disable frustum checks.
+    set_frustum_checks_enabled(FALSE);
+    
     D_80370990 = (D_80383704) ? viewport_func_8024DB50(object_position, spD0*scale) : 1;
+    
+    // @recomp Re-enable frustum checks.
+    set_frustum_checks_enabled(TRUE);
+
     if(D_80370990 == 0){
         modelRender_reset();
         return 0;
@@ -416,6 +434,12 @@ RECOMP_PATCH BKModelBin *modelRender_draw(Gfx **gfx, Mtx **mtx, f32 position[3],
         func_80252AF0(modelRenderCameraPosition, object_position, rotation, scale, arg5);
     }
 
+    // @recomp Patched to provide a spot to apply a non-uniform scale.
+    if (has_additional_model_scale) {
+        mlMtxScale_xyz(additional_model_scale_x, additional_model_scale_y, additional_model_scale_z);
+        has_additional_model_scale = FALSE;
+    }
+
     if(D_803837B0.unk0){
         mlMtxRotatePYR(D_803837B0.unk4[0], D_803837B0.unk4[1], D_803837B0.unk4[2]);
     }
@@ -439,7 +463,14 @@ RECOMP_PATCH BKModelBin *modelRender_draw(Gfx **gfx, Mtx **mtx, f32 position[3],
         modelRenderRotation[0] = modelRenderRotation[1] = modelRenderRotation[2] = 0.0f;
     }
 
+    // @recomp Disable frustum checks before processing bones.
+    set_frustum_checks_enabled(FALSE);
+
     func_80339124(gfx, mtx, (BKGeoList *)((u8 *)model_bin + model_bin->geo_list_offset_4));
+    
+    // @recomp Re-enable frustum checks after processing bones.
+    set_frustum_checks_enabled(TRUE);
+
     gSPPopMatrix((*gfx)++, G_MTX_MODELVIEW);
 
     // @recomp Pop the matrix group if a transform id is set.
