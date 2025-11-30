@@ -121,4 +121,7 @@ RECOMP_PATCH void game_draw(s32 arg0){
             scissorBox_setDefault();
         }
     }
+
+    // Allow interpolation for the next frame.
+    set_all_interpolation_skipped(FALSE);
 }

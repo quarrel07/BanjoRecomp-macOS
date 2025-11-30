@@ -15,7 +15,7 @@ extern u8 D_80383428[0x1C];
 void func_8032F3D4(s32 arg0[3], ActorMarker *marker, s32 arg2);
 ActorMarker * func_80332A60(void);
 
-// @recomp Patched to reset all extended marker data.
+// @recomp Patched to reset all extended marker data and skip interpolation for the next frame.
 RECOMP_PATCH void func_803329AC(void){
     s32 i;
     
@@ -29,8 +29,11 @@ RECOMP_PATCH void func_803329AC(void){
         D_8036E7C8[i].unk5C = 0;
     }
 
-    // @recomp Reset all actor data.
+    // @recomp Reset all actor data and skip interpolation for the next frame.
+    // Interpolation is skipped as the next frame will potentially reuse IDs from the previous frame,
+    // as the marker ID tracking gets reset here.
     recomp_clear_all_object_data(EXTENSION_TYPE_MARKER);
+    set_all_interpolation_skipped(TRUE);
 }
 
 // @recomp Patched to create extension data for the marker.

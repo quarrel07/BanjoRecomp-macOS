@@ -6,10 +6,19 @@
 #include "core1/mlmtx.h"
 #include "functions.h"
 
+bool skip_all_interpolation = FALSE;
 bool has_additional_model_scale = FALSE;
 f32 additional_model_scale_x;
 f32 additional_model_scale_y;
 f32 additional_model_scale_z;
+
+void set_all_interpolation_skipped(bool skipped) {
+    skip_all_interpolation = skipped;
+}
+
+bool all_interpolation_skipped() {
+    return skip_all_interpolation;
+}
 
 void set_additional_model_scale(f32 x, f32 y, f32 z) {
     has_additional_model_scale = TRUE;
@@ -54,8 +63,8 @@ RECOMP_PATCH void func_803387F8(Gfx **gfx, Mtx **mtx, void *arg2){
             mlMtxApply(*mtx);
             gSPMatrix((*gfx)++, (*mtx)++, G_MTX_PUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
 
-            if (cur_drawn_model_transform_id == -1) {
-                // @recomp Skip interpolation if the transform id is -1.
+            if (skip_all_interpolation || cur_drawn_model_transform_id == -1) {
+                // @recomp Skip interpolation if all interpolation is currently skipped or the transform id is -1.
                 gEXMatrixGroupNoInterpolate((*gfx)++, G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
             }
             else if (cur_drawn_model_transform_id != 0) {
@@ -449,7 +458,11 @@ RECOMP_PATCH BKModelBin *modelRender_draw(Gfx **gfx, Mtx **mtx, f32 position[3],
     gSPMatrix((*gfx)++, (*mtx)++, G_MTX_PUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
     
     // @recomp Create a matrix group if a transform id is set.
-    if (cur_drawn_model_transform_id != 0) {
+    if (skip_all_interpolation || cur_drawn_model_transform_id == -1) {
+        // @recomp Skip interpolation if all interpolation is currently skipped or the transform id is -1.
+        gEXMatrixGroupNoInterpolate((*gfx)++, G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
+    }
+    else if (cur_drawn_model_transform_id != 0) {
         gEXMatrixGroupDecomposedVerts((*gfx)++, cur_drawn_model_transform_id, G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
     }
     
