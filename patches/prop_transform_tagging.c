@@ -96,7 +96,7 @@ RECOMP_PATCH void func_8032D510(Cube *cube, Gfx **gfx, Mtx **mtx, Vtx **vtx){
                     gEXMatrixGroupDecomposed((*gfx)++, base_transform_id, G_EX_PUSH, G_MTX_MODELVIEW,
                         G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_INTERPOLATE,
                         G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_INTERPOLATE,
-                        G_EX_ORDER_LINEAR, G_EX_EDIT_ALLOW);
+                        G_EX_ORDER_LINEAR, G_EX_EDIT_ALLOW, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_AUTO);
 
                     // @recomp Also set the model render transform ID before drawing the sprite. This won't have any effect
                     // in the unmodified game, but will allow transform tagging for mods that draw models in place of sprites.

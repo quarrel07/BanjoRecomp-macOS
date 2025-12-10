@@ -157,13 +157,14 @@ RECOMP_PATCH void mapModel_opa_draw(Gfx **gfx, Mtx **mtx, Vtx **vtx) {
         }
         modelRender_setEnvColor(mapModel.env_red, mapModel.env_green, mapModel.env_blue, 0xFF);
         
-        // TODO improve modelbin rendering to prevent culling and sorting from causing interpolation glitches.
-        // // @recomp Set the map opaque model transform id.
-        // cur_drawn_model_transform_id = MAP_MODEL_OPA_TRANSFORM_ID_START;
+        // @recomp Set the map opaque model transform id.
+        cur_drawn_model_is_map = TRUE;
+        cur_drawn_model_transform_id = MAP_MODEL_OPA_TRANSFORM_ID_START;
 
         modelRender_draw(gfx, mtx, NULL, NULL, mapModel.description->scale, NULL, mapModel.model_bin_opa);
         
         // @recomp Clear the current model transform id after drawing.
+        cur_drawn_model_is_map = FALSE;
         cur_drawn_model_transform_id = 0;
 
         if (!mapModel_has_xlu_bin()) {
@@ -187,13 +188,14 @@ RECOMP_PATCH void mapModel_xlu_draw(Gfx **gfx, Mtx **mtx, Vtx **vtx) {
         }
         modelRender_setEnvColor(mapModel.env_red, mapModel.env_green, mapModel.env_blue, 0xFF);
         
-        // TODO improve modelbin rendering to prevent culling and sorting from causing interpolation glitches.
-        // // @recomp Set the map opaque model transform id.
-        // cur_drawn_model_transform_id = MAP_MODEL_XLU_TRANSFORM_ID_START;
+        // @recomp Set the map opaque model transform id.
+        cur_drawn_model_is_map = TRUE;
+        cur_drawn_model_transform_id = MAP_MODEL_XLU_TRANSFORM_ID_START;
 
         modelRender_draw(gfx, mtx, NULL, NULL, mapModel.description->scale, NULL, mapModel.model_bin_xlu);
         
         // @recomp Clear the current model transform id after drawing.
+        cur_drawn_model_is_map = FALSE;
         cur_drawn_model_transform_id = 0;
 
         func_802F7BC0(gfx, mtx, vtx);

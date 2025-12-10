@@ -27,9 +27,35 @@ void set_additional_model_scale(f32 x, f32 y, f32 z) {
     additional_model_scale_z = z;
 }
 
+s32 cur_drawn_model_is_map = FALSE;
 s32 cur_drawn_model_transform_id = 0;
 
+Mtx identity_fixed_mtx = {{
+    {
+        0x00010000, 0x00000000,
+        0x00000001, 0x00000000, }, {
+        0x00000000, 0x00010000,
+        0x00000000, 0x00000001,
+    },
+    {
+        0x00000000, 0x00000000,
+        0x00000000, 0x00000000, }, {
+        0x00000000, 0x00000000,
+        0x00000000, 0x00000000,
+    }
+}};
+
 typedef void (*GeoListFunc)(Gfx **, Mtx **, void *);
+
+typedef struct {
+    s32 cmd_0;
+    s32 size_4;
+    f32 unk8[3];
+    f32 unk14[3];
+    s16 unk20;
+    s16 unk22;
+    s32 unk24;
+}GeoCmd1;
 
 typedef struct {
     s32 cmd_0;
@@ -38,10 +64,22 @@ typedef struct {
     s8  unk9;
 }GeoCmd2;
 
+typedef struct {
+    s32 cmd_0;
+    s32 size_4;
+    s16 unk8;
+}GeoCmd3;
+
+extern BKModelBin *modelRenderModelBin;
+extern BKGfxList *modelRenderDisplayList;
 extern AnimMtxList *D_8038371C;
 extern MtxF D_80383BF8;
 extern s32 D_80370990;
 extern GeoListFunc D_80370994[];
+extern f32 D_80383C64;
+extern f32 D_80383C68[3];
+extern f32 D_80383C78[3];
+extern f32 D_80383C88[3];
 
 void func_80339124(Gfx **, Mtx **, BKGeoList *);
 MtxF *animMtxList_get(AnimMtxList *this, s32 arg1);
@@ -53,6 +91,57 @@ void func_802ED52C(BKModelUnk20List *arg0, f32 arg1[3], f32 arg2);
 void func_802E6BD0(BKModelUnk28List *arg0, BKVertexList *arg1, AnimMtxList *mtx_list);
 void assetCache_free(void *arg0);
 
+void set_model_matrix_group(Gfx **gfx, void *geo_list, u32 bone_index) {
+    if (skip_all_interpolation || cur_drawn_model_transform_id == -1) {
+        // @recomp Skip interpolation if all interpolation is currently skipped or the transform id is -1.
+        gEXMatrixGroupNoInterpolate((*gfx)++, G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
+    }
+    else if (cur_drawn_model_transform_id != 0) {
+        u32 group_id;
+        // Pick a group ID based on whether this is a map or not.
+        if (cur_drawn_model_is_map) {
+            // Map models use a group ID determined by the offset of the geo command to guarantee they're unique and consistent between frames.
+            group_id = cur_drawn_model_transform_id + (u32)geo_list - (u32)modelRenderModelBin - modelRenderModelBin->geo_list_offset_4;
+        }
+        else {
+            // Other models use a group ID determined by the bone index.
+            group_id = cur_drawn_model_transform_id + bone_index;
+        }
+        // @recomp Tag the matrix.
+        // gEXMatrixGroupSimpleNormal((*gfx)++, group_id, G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
+        gEXMatrixGroupSimpleVerts((*gfx)++, group_id, G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
+        // gEXMatrixGroupDecomposedNormal((*gfx)++, group_id, G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
+        // gEXMatrixGroupDecomposedVerts((*gfx)++, group_id, G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
+    }
+}
+
+void pop_model_matrix_group(Gfx **gfx) {
+    gEXPopMatrixGroup((*gfx)++, G_MTX_MODELVIEW);
+}
+
+// @recomp Patched to multiply the identity matrix to create a new matrix group and count up if drawing a map model.
+RECOMP_PATCH void func_80338904(Gfx **gfx, Mtx **mtx, void *arg2){
+    GeoCmd3 *cmd = (GeoCmd3 *)arg2;
+    Gfx *vptr;
+
+    if(D_80370990){
+        // @recomp Create a new matrix by multiplying in the identity matrix.
+        if (cur_drawn_model_is_map) {
+            gSPMatrix((*gfx)++, &identity_fixed_mtx, G_MTX_PUSH | G_MTX_MUL | G_MTX_MODELVIEW);
+            set_model_matrix_group(gfx, arg2, 0);
+        }
+
+        vptr = &modelRenderDisplayList->list[cmd->unk8];
+        gSPDisplayList((*gfx)++, osVirtualToPhysical(vptr));
+        
+        // @recomp Pop the matrix if one was created.
+        if (cur_drawn_model_is_map) {
+            gSPPopMatrix((*gfx)++, G_MTX_MODELVIEW);
+            pop_model_matrix_group(gfx);
+        }
+    }
+}
+
 // @recomp Patched to set matrix groups when processing geo bones.
 RECOMP_PATCH void func_803387F8(Gfx **gfx, Mtx **mtx, void *arg2){
     GeoCmd2 *cmd = (GeoCmd2 *)arg2;
@@ -63,17 +152,8 @@ RECOMP_PATCH void func_803387F8(Gfx **gfx, Mtx **mtx, void *arg2){
             mlMtxApply(*mtx);
             gSPMatrix((*gfx)++, (*mtx)++, G_MTX_PUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
 
-            if (skip_all_interpolation || cur_drawn_model_transform_id == -1) {
-                // @recomp Skip interpolation if all interpolation is currently skipped or the transform id is -1.
-                gEXMatrixGroupNoInterpolate((*gfx)++, G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
-            }
-            else if (cur_drawn_model_transform_id != 0) {
-                // @recomp Tag the matrix.
-                // gEXMatrixGroupSimpleNormal((*gfx)++, cur_drawn_model_transform_id + cmd->unk9, G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
-                gEXMatrixGroupSimpleVerts((*gfx)++, cur_drawn_model_transform_id + cmd->unk9, G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
-                // gEXMatrixGroupDecomposedNormal((*gfx)++, cur_drawn_model_transform_id + cmd->unk9, G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
-                // gEXMatrixGroupDecomposedVerts((*gfx)++, cur_drawn_model_transform_id + cmd->unk9, G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
-            }
+            // Create a matrix group for this bone.
+            set_model_matrix_group(gfx, arg2, cmd->unk9);
         }
     }
     if(cmd->unk8){
@@ -86,8 +166,101 @@ RECOMP_PATCH void func_803387F8(Gfx **gfx, Mtx **mtx, void *arg2){
 
             if (cur_drawn_model_transform_id != 0) {
                 // @recomp Pop the matrix group.
-                gEXPopMatrixGroup((*gfx)++, G_MTX_MODELVIEW);
+                pop_model_matrix_group(gfx);
             }
+        }
+    }
+}
+
+// @recomp Patched to set process sorted geo commands in a consistent order while still drawing them in the original order.
+// This allows a consistent ID scheme even when sorting changes.
+RECOMP_PATCH void func_803385BC(Gfx **gfx, Mtx **mtx, void *arg2){
+    GeoCmd1 *cmd = (GeoCmd1 *)arg2;
+    f32 f14;
+    s32 tmp_v0;
+
+    mlMtx_apply_vec3f(D_80383C78, cmd->unk8);
+    mlMtx_apply_vec3f(D_80383C88, cmd->unk14);
+
+    D_80383C68[0] = D_80383C88[0] - D_80383C78[0];
+    D_80383C68[1] = D_80383C88[1] - D_80383C78[1];
+    D_80383C68[2] = D_80383C88[2] - D_80383C78[2];
+
+    f14 = D_80383C68[0]*D_80383C78[0] + D_80383C68[1]*D_80383C78[1] + D_80383C68[2]*D_80383C78[2];
+    f14 = -f14;
+    if(cmd->unk20 & 1){
+        // recomp_printf("stuff 1 %08X\n", cur_drawn_model_transform_id);
+        if(0.0f <= f14 && (tmp_v0 = cmd->unk24)){
+            D_80383C64 = f14;
+            func_80339124(gfx, mtx, (BKGeoList*)((s32)cmd + tmp_v0));
+        }
+        else{
+            D_80383C64 = f14;
+            if(f14 < 0.0f){
+                if(cmd->unk22)
+                    func_80339124(gfx, mtx, (BKGeoList*)((s32)cmd + cmd->unk22));
+            }
+        }
+    }
+    else{
+        D_80383C64 = f14;
+        if(0.0f <= f14){
+            // recomp_printf("stuff 2 %08X\n", cur_drawn_model_transform_id);
+            if(cmd->unk22)
+                func_80339124(gfx, mtx, (BKGeoList*)((s32)cmd + cmd->unk22));
+
+            if(cmd->unk24)
+                func_80339124(gfx, mtx, (BKGeoList*)((s32)cmd + cmd->unk24));
+        }
+        else{
+            // recomp_printf("stuff 3 %08X\n", cur_drawn_model_transform_id);
+            // @recomp Nodes have been sorted into the reverse order. This code has been modified
+            // to process the nodes in the forward order, but uses DL branch list commands to run the 
+            // DL commands of the nodes in the reverse order.
+            // This makes matrix group IDs consistent between frames while still running the actual DL commands
+            // in the sorted order.
+            // The resulting DL will look like this:
+            //      before_cmds:
+            //        BranchList(before_unk24)──────╖
+            //      before_unk22: <─────────────────╫────╖
+            //        Commands for node 22          ║    ║
+            //      between_cmds:                   ║    ║
+            //        BranchList(after_commands) ───╫────╫───╖
+            //      before_unk24: <─────────────────╜    ║   ║
+            //        Commands for node 24               ║   ║
+            //      after_unk24:                         ║   ║
+            //        BranchList(before_unk22)───────────╜   ║
+            //      after_commands: <────────────────────────╜
+
+            // Reserve one command worth of space for the branch list to the unk22 node.
+            Gfx* before_cmds = (*gfx);
+            (*gfx)++;
+            Gfx* before_unk22 = (*gfx);
+
+            // Run the unk22 node's processing first.
+            // Branch list commands will be used to run these commands after the unk24 node's commands.
+            if(cmd->unk22)
+                func_80339124(gfx, mtx, (BKGeoList*)((s32)cmd + cmd->unk22));
+
+            // Reserve another command for the branch list that takes the command cursor past the unk24 node's DL commands
+            // after running the unk22 node's DL commands.
+            Gfx* between_cmds = (*gfx);
+            (*gfx)++;
+            Gfx* before_unk24 = (*gfx);
+
+            // Run the unk24 node's processing second.
+            if(cmd->unk24)
+                func_80339124(gfx, mtx, (BKGeoList*)((s32)cmd + cmd->unk24));
+            
+            // Reserve the command for the third branch list.
+            Gfx* after_unk24 = (*gfx);
+            (*gfx)++;
+            Gfx* after_commands = (*gfx);
+
+            // Populate the branch list commands.
+            gSPBranchList(before_cmds, before_unk24);
+            gSPBranchList(between_cmds, after_commands);
+            gSPBranchList(after_unk24, before_unk22);
         }
     }
 }
@@ -147,7 +320,6 @@ extern struct {
 extern MtxF D_80383BF8;
 extern f32 modelRenderCameraPosition[3];
 extern f32 modelRenderCameraRotation[3];
-extern BKModelBin *modelRenderModelBin;
 extern f32 modelRenderRotation[3];
 extern f32 D_80383C64;
 extern f32 D_80383C68[3];
@@ -183,6 +355,15 @@ extern struct{
     s32 env[4];
     s32 prim[4];
 } modelRenderDynColors;
+
+RECOMP_PATCH void func_80339124(Gfx ** gfx, Mtx ** mtx, BKGeoList *geo_list){
+    do{
+        D_80370994[geo_list->cmd_0](gfx, mtx, geo_list);
+        if(geo_list->size_4 == 0)
+            return;
+        geo_list = (BKGeoList*)((s32)geo_list + geo_list->size_4);
+    }while(1);
+}
 
 // @recomp Patched to set an initial matrix group for the draw.
 RECOMP_PATCH BKModelBin *modelRender_draw(Gfx **gfx, Mtx **mtx, f32 position[3], f32 rotation[3], f32 scale, f32*arg5, BKModelBin* model_bin){
