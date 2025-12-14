@@ -14,6 +14,7 @@
 #include "../patches/sound.h"
 #include "ultramodern/ultramodern.hpp"
 #include "ultramodern/config.hpp"
+#include "../lib/N64ModernRuntime/thirdparty/xxHash/xxh3.h"
 
 extern "C" void recomp_update_inputs(uint8_t* rdram, recomp_context* ctx) {
     recomp::poll_inputs();
@@ -218,4 +219,21 @@ extern "C" void recomp_abort(uint8_t* rdram, recomp_context* ctx) {
     recompui::message_box(msg.c_str());
     assert(false);
     ultramodern::error_handling::quick_exit(__FILE__, __LINE__, __FUNCTION__);
+}
+
+extern "C" void recomp_xxh3(uint8_t* rdram, recomp_context* ctx) {
+    PTR(void) data = _arg<0, PTR(void)>(rdram, ctx);
+    u32 size = _arg<1, u32>(rdram, ctx);
+    XXH3_state_t xxh3;
+    XXH3_64bits_reset(&xxh3);
+
+    // Hash 1 byte at a time to account for byteswapping.
+    for (size_t i = 0; i < size; i++) {
+        XXH3_64bits_update(&xxh3, TO_PTR(u8, data + i), 1);
+    }
+
+    uint64_t ret = XXH3_64bits_digest(&xxh3);
+    
+    ctx->r2 = (int32_t)(ret >> 32);
+    ctx->r3 = (int32_t)(ret >> 0);
 }

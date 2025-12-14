@@ -36,3 +36,4 @@ osPiStartDma_recomp = 0x8F00007C;
 recomp_abort = 0x8F000080;
 recomp_get_target_aspect_ratio = 0x8F000084;
 osExQueueDisplaylistEvent_recomp = 0x8F000088;
+recomp_xxh3 = 0x8F00008C;
