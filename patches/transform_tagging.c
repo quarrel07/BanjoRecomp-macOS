@@ -92,7 +92,7 @@ void func_802ED52C(BKModelUnk20List *arg0, f32 arg1[3], f32 arg2);
 void func_802E6BD0(BKModelUnk28List *arg0, BKVertexList *arg1, AnimMtxList *mtx_list);
 void assetCache_free(void *arg0);
 
-void set_model_matrix_group(Gfx **gfx, void *geo_list, u32 bone_index) {
+bool set_model_matrix_group(Gfx **gfx, void *geo_list, u32 bone_index) {
     if (cur_drawn_model_transform_id != 0) {
         u32 group_id;
         // Pick a group ID based on whether this is a map or not.
@@ -113,9 +113,11 @@ void set_model_matrix_group(Gfx **gfx, void *geo_list, u32 bone_index) {
             // @recomp Tag the matrix.
             gEXMatrixGroupSimpleVerts((*gfx)++, group_id, G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_NONE);
         }
+        return TRUE;
     }
     else if (skip_all_interpolation) {
         gEXMatrixGroupNoInterpolate((*gfx)++, G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_NONE);
+        return FALSE;
     }
 }
 
@@ -129,10 +131,11 @@ RECOMP_PATCH void func_80338904(Gfx **gfx, Mtx **mtx, void *arg2){
     Gfx *vptr;
 
     if(D_80370990){
+        bool pushed_matrix_group = FALSE;
         // @recomp Create a new matrix by multiplying in the identity matrix.
         if (cur_drawn_model_is_map) {
             gSPMatrix((*gfx)++, &identity_fixed_mtx, G_MTX_PUSH | G_MTX_MUL | G_MTX_MODELVIEW);
-            set_model_matrix_group(gfx, arg2, 0);
+            pushed_matrix_group = set_model_matrix_group(gfx, arg2, 0);
         }
 
         vptr = &modelRenderDisplayList->list[cmd->unk8];
@@ -141,7 +144,9 @@ RECOMP_PATCH void func_80338904(Gfx **gfx, Mtx **mtx, void *arg2){
         // @recomp Pop the matrix if one was created.
         if (cur_drawn_model_is_map) {
             gSPPopMatrix((*gfx)++, G_MTX_MODELVIEW);
-            pop_model_matrix_group(gfx);
+            if (pushed_matrix_group) {
+                pop_model_matrix_group(gfx);
+            }
         }
     }
 }
@@ -149,6 +154,7 @@ RECOMP_PATCH void func_80338904(Gfx **gfx, Mtx **mtx, void *arg2){
 // @recomp Patched to set matrix groups when processing geo bones.
 RECOMP_PATCH void func_803387F8(Gfx **gfx, Mtx **mtx, void *arg2){
     GeoCmd2 *cmd = (GeoCmd2 *)arg2;
+    bool pushed_matrix_group = FALSE;
 
     if(D_8038371C){
         mlMtx_push_multiplied_2(&D_80383BF8, animMtxList_get(D_8038371C, cmd->unk9));
@@ -157,7 +163,7 @@ RECOMP_PATCH void func_803387F8(Gfx **gfx, Mtx **mtx, void *arg2){
             gSPMatrix((*gfx)++, (*mtx)++, G_MTX_PUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
 
             // Create a matrix group for this bone.
-            set_model_matrix_group(gfx, arg2, cmd->unk9);
+            pushed_matrix_group = set_model_matrix_group(gfx, arg2, cmd->unk9);
         }
     }
     if(cmd->unk8){
@@ -168,7 +174,7 @@ RECOMP_PATCH void func_803387F8(Gfx **gfx, Mtx **mtx, void *arg2){
         if(D_80370990){
             gSPPopMatrix((*gfx)++, G_MTX_MODELVIEW);
 
-            if (cur_drawn_model_transform_id != 0) {
+            if (pushed_matrix_group) {
                 // @recomp Pop the matrix group.
                 pop_model_matrix_group(gfx);
             }
