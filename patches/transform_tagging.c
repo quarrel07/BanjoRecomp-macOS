@@ -117,6 +117,9 @@ bool set_model_matrix_group(Gfx **gfx, void *geo_list, u32 bone_index) {
     }
     else if (skip_all_interpolation) {
         gEXMatrixGroupNoInterpolate((*gfx)++, G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_NONE);
+        return TRUE;
+    }
+    else {
         return FALSE;
     }
 }
