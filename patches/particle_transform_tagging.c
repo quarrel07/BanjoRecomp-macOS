@@ -8,16 +8,7 @@
 #include "core2/particle.h"
 #include "core2/timedfunc.h"
 
-// 2 bytes of padding between alpha and particleAccerationRange_4C. Must be at least 16-bit to fit the full range of PARTICLE_EMITTER_MAX_ID.
-#define PARTICLE_EMITTER_ID(x) (*(u16*)&((x)->pad4A))
-
-// 2 bytes of padding between unk104 and unk108. Must be at least 16-bit to fit the full range of PARTICLE_EMITTER_TRANSFORM_ID_COUNT.
-#define PARTICLE_EMITTER_SPAWN_COUNT(x) (*(u16*)&((x)->pad106))
-
-// 2 bytes of padding after unk5C (skipping 1 byte for alignment). Must be at least as bit as the emitter spawn count field.
-#define PARTICLE_ID(x) (*(u16*)&(&(x)->unk5C)[2])
-
-u32 particle_emitter_spawn_count = 0;
+u32 particle_spawn_count = 0;
 
 extern ParticleEmitter **partEmitMgr;
 extern s32 partEmitMgrLength;
@@ -39,6 +30,21 @@ typedef struct particle{
     u8 unk5C;
     //u8 pad5D[3];
 } Particle;
+
+u32 get_particle_id(Particle *p) {
+    u8 *padding = &p->unk5C + 1;
+
+    u32 id = (padding[0] << 16) | (padding[1] << 8) | (padding[2] << 0);
+    return id;
+}
+
+void set_particle_id(Particle *p, u32 id) {
+    u8 *padding = &p->unk5C + 1;
+
+    padding[0] = (id >> 16) & 0xFF;
+    padding[1] = (id >>  8) & 0xFF;
+    padding[2] = (id >>  0) & 0xFF;
+}
 
 extern Gfx D_80368978[];
 extern Gfx D_80368940[];
@@ -62,9 +68,6 @@ RECOMP_PATCH void __particleEmitter_drawOnPass(ParticleEmitter *this, Gfx **gfx,
     f32 scale[3];
     Particle *iPtr;
 
-    // @recomp Get the particle emitter's ID.
-    u32 cur_particle_emitter_index = PARTICLE_EMITTER_ID(this);
-
     if(reinterpret_cast(u32, draw_pass) != (this->draw_mode & 0x4) != 0)
         return;
 
@@ -77,16 +80,11 @@ RECOMP_PATCH void __particleEmitter_drawOnPass(ParticleEmitter *this, Gfx **gfx,
                 modelRender_setAlpha((s32) (iPtr->fade*this->alpha));
             }//L802EEF5C
             modelRender_setDepthMode((this->draw_mode & PART_EMIT_NO_DEPTH)? MODEL_RENDER_DEPTH_NONE : MODEL_RENDER_DEPTH_FULL);
-            // @recomp Get the particle's ID. Restrict it to the model particle emitter ID count to account for the smaller number of base transform IDs for
-            // model particle emitters.
-            u32 particle_id = PARTICLE_ID(iPtr) % PARTICLE_EMITTER_MODEL_ID_COUNT;
-            // @recomp Set the current model transform ID. Divide the total per-emitter transform ID count by the per-model transform ID count to get the
-            // base transform ID for the current model particle.
-            cur_drawn_model_transform_id =
-                PARTICLE_TRANSFORM_ID_START +
-                PARTICLE_EMITTER_TRANSFORM_ID_COUNT * cur_particle_emitter_index + 
-                particle_id * PARTICLE_EMITTER_MODEL_ID_COUNT;
+            // @recomp Get the particle's ID and use it to set the current model transform ID.
+            cur_drawn_model_transform_id = MODEL_PARTICLE_TRANSFORM_ID_START + (get_particle_id(iPtr) % MODEL_PARTICLE_ID_MAX) * MARKER_TRANSFORM_ID_COUNT;
+
             modelRender_draw(gfx, mtx, position, iPtr->rotation, iPtr->scale, NULL, this->model_20);
+
             // @recomp Reset the current model transform ID.
             cur_drawn_model_transform_id = 0;
         }
@@ -132,11 +130,8 @@ RECOMP_PATCH void __particleEmitter_drawOnPass(ParticleEmitter *this, Gfx **gfx,
                 func_802EED1C(this, iPtr->age_48, scale);
             }
             func_80344C2C(this->unk0_16);
-            // @recomp Set the matrix group for this particle.
-            u32 transform_id = 
-                PARTICLE_TRANSFORM_ID_START +
-                PARTICLE_EMITTER_TRANSFORM_ID_COUNT * cur_particle_emitter_index + 
-                PARTICLE_ID(iPtr);
+            // @recomp Get the particle's ID and use it to set a matrix group for this particle.
+            u32 transform_id = NORMAL_PARTICLE_TRANSFORM_ID_START + get_particle_id(iPtr);
             gEXMatrixGroupDecomposedNormal((*gfx)++, transform_id, G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
 
             if(this->draw_mode & PART_EMIT_ROTATABLE){
@@ -154,19 +149,6 @@ RECOMP_PATCH void __particleEmitter_drawOnPass(ParticleEmitter *this, Gfx **gfx,
             func_8033687C(gfx);
         }
     }
-}
-
-// @recomp Patched to set an incrementing ID for the emitter.
-RECOMP_PATCH ParticleEmitter *partEmitMgr_newEmitter(u32 cnt){
-    partEmitMgr = realloc(partEmitMgr, (++partEmitMgrLength)*4);
-    partEmitMgr[partEmitMgrLength - 1] = particleEmitter_new(cnt);
-    partEmitMgr[partEmitMgrLength - 1]->auto_free = TRUE;
-    // @recomp Set the particle emitter's ID based on the emitter spawn count and increment the spawn count.
-    PARTICLE_EMITTER_ID(partEmitMgr[partEmitMgrLength - 1]) = particle_emitter_spawn_count;
-    particle_emitter_spawn_count++;
-    particle_emitter_spawn_count = particle_emitter_spawn_count % PARTICLE_EMITTER_MAX_ID;
-
-    return partEmitMgr[partEmitMgrLength - 1];
 }
 
 // @recomp Patched to set an incrementing ID for the particle.
@@ -219,10 +201,13 @@ RECOMP_PATCH void __particleEmitter_initParticle(ParticleEmitter *this, Particle
         );
     }
     
-    // @recomp Set the particle's ID based on the particle emitters's spawn count.
-    PARTICLE_ID(particle) = PARTICLE_EMITTER_SPAWN_COUNT(this);
-    // @recomp Increment the particle emitter's spawn count.
-    PARTICLE_EMITTER_SPAWN_COUNT(this)++;
+    // @recomp Set the particle's ID based on the particle spawn count.
+    set_particle_id(particle, particle_spawn_count);
+    // @recomp Increment the particle spawn count.
+    particle_spawn_count++;
+    if (particle_spawn_count >= NORMAL_PARTICLE_ID_MAX) {
+        particle_spawn_count = 0;
+    }
 }
 
 extern void mlMtxRotatePYR(f32, f32, f32);
