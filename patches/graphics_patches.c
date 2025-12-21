@@ -93,6 +93,9 @@ RECOMP_PATCH void game_draw(s32 arg0){
     gEXEnable(gfx++);
     gEXSetRefreshRate(gfx++, 60 / viMgr_func_8024BFA0()); // Input framerate is equal to 60 Hz divided by the frame divisor
 
+    // @recomp Turn off nearclipping (i.e. turn on depth clamp) to prevent the camera from clipping through lots of geometry in ultrawide aspect ratios.
+    gEXSetNearClipping(gfx++, FALSE);
+
     func_802E39D0(&gfx, &mtx, &vtx, getActiveFramebuffer(), arg0);
 
     // @recomp Check for graphics stack overflow
