@@ -346,7 +346,16 @@ RECOMP_PATCH void func_803164B0(GcZoombox *this, Gfx **gfx, Mtx **mtx, s32 arg3,
     modelRender_setDepthMode(MODEL_RENDER_DEPTH_NONE);
     func_80344090(arg5, this->unk186, gfx);
     func_8033687C(gfx);
+
+    // @recomp Set the perpsective projection transform ID before restoring the game's normal projection.
+    // This is because zoomboxes are drawn in the normal gameplay projection.
+    u32 prev_projection_id = cur_perspective_projection_transform_id;
+    cur_perspective_projection_transform_id = PROJECTION_GAMEPLAY_TRANSFORM_ID;
+
     viewport_setRenderViewportAndPerspectiveMatrix(gfx, mtx);
+
+    // @recomp Reset the projection ID.
+    cur_perspective_projection_transform_id = prev_projection_id;
 
     // @recomp Pop the model matrix group.
     gEXPopMatrixGroup((*gfx)++, G_MTX_MODELVIEW);
