@@ -4,6 +4,8 @@
 #include "functions.h"
 #include "../src/core2/gc/zoombox.h"
 
+extern MtxF sViewportMatrix;
+extern f32 sViewportLookVector[3];
 extern u32 D_803835E0;
 void func_802BBD2C(f32 *arg0, f32 *arg1);
 s32 func_80320708(void);
@@ -40,98 +42,135 @@ void func_8033687C(Gfx **);
 void func_80335D30(Gfx **);
 void func_80344090(BKSpriteDisplayData *self, s32 frame, Gfx **gfx);
 
-// @recomp Patched to set the projection transform ID for the main projection.
-RECOMP_PATCH void func_80334540(Gfx** gdl, Mtx **mptr, Vtx **vptr) {
-    f32 sp44;
-    f32 sp40;
-
-    if (D_803835E0 == 0) {
-        drawRectangle2D(gdl, 0, 0, gFramebufferWidth, gFramebufferHeight, 0, 0, 0);
-        func_802BBD2C(&sp44, &sp40);
-        viewport_setNearAndFar(sp44, sp40);
-
-        // @recomp Set the perpsective projection transform ID.
-        cur_perspective_projection_transform_id = PROJECTION_GAMEPLAY_TRANSFORM_ID;
-        
-        viewport_setRenderViewportAndPerspectiveMatrix(gdl, mptr);
-        return;
-    }
-    if (func_80320708() == 0) {
-        eeprom_writeBlocks(0, 0, (void*)0x80BC7230, EEPROM_MAXBLOCKS);
-    }
-    spawnQueue_unlock();
-    sky_draw(gdl, mptr, vptr);
-    func_802BBD2C(&sp44, &sp40);
-    viewport_setNearAndFar(sp44, sp40);
-    
-    // @recomp Set the perpsective projection transform ID.
-    cur_perspective_projection_transform_id = PROJECTION_GAMEPLAY_TRANSFORM_ID;
-
-    viewport_setRenderViewportAndPerspectiveMatrix(gdl, mptr);
-    if (mapModel_has_xlu_bin() != 0) {
-        mapModel_opa_draw(gdl, mptr, vptr);
-        if (game_is_frozen() == 0) {
-            func_80322E64(gdl, mptr, vptr);
-        }
-        if (game_is_frozen() == 0) {
-            player_draw(gdl, mptr, vptr);
-        }
-        if (game_is_frozen() == 0) {
-            func_80302C94(gdl, mptr, vptr);
-        }
-        if (game_is_frozen() == 0) {
-            jiggylist_draw(gdl, mptr, vptr);
-        }
-        if (game_is_frozen() == 0) {
-            func_803500D8(gdl, mptr, vptr);
-        }
-        if (game_is_frozen() == 0) {
-            func_802F2ED0(func_8032994C(), gdl, mptr, vptr);
-        }
-        if (game_is_frozen() == 0) {
-            partEmitMgr_drawPass0(gdl, mptr, vptr);
-        }
-        if (game_is_frozen() == 0) {
-            mapModel_xlu_draw(gdl, mptr, vptr);
-        }
-        if (game_is_frozen() == 0) {
-            func_8032D3D8(gdl, mptr, vptr);
-        }
-        if (game_is_frozen() == 0) {
-            partEmitMgr_drawPass1(gdl, mptr, vptr);
-        }
-        if (game_is_frozen() == 0) {
-            func_8034F6F0(gdl, mptr, vptr);
-        }
-        func_802D520C(gdl, mptr, vptr);
-    } else {
-        mapModel_opa_draw(gdl, mptr, vptr);
-        func_80322E64(gdl, mptr, vptr);
-        func_8034F6F0(gdl, mptr, vptr);
-        player_draw(gdl, mptr, vptr);
-        func_80302C94(gdl, mptr, vptr);
-        func_8032D3D8(gdl, mptr, vptr);
-        jiggylist_draw(gdl, mptr, vptr);
-        func_803500D8(gdl, mptr, vptr);
-        func_802F2ED0(func_8032994C(), gdl, mptr, vptr);
-        func_802D520C(gdl, mptr, vptr);
-        partEmitMgr_draw(gdl, mptr, vptr);
-    }
-    if (game_is_frozen() == 0) {
-        func_80350818(gdl, mptr, vptr);
-    }
-    if (game_is_frozen() == 0) {
-        func_802BBD0C(gdl, mptr, vptr);
-    }
-    spawnQueue_lock();
-    
-    // @recomp Clear the perpsective projection transform ID.
-    cur_perspective_projection_transform_id = 0;
-}
-
 void actor_predrawMethod(Actor *);
 void actor_postdrawMethod(ActorMarker *);
 extern bool D_8037DE84;
+
+extern struct {
+    s32 unk0;
+    s32 game_mode; //game_mode
+    f32 unk8;
+    s32 unkC; //freeze_scene_flag (used for pause menu)
+    f32 unk10;
+    u8 transition;
+    u8 map;
+    u8 exit;
+    u8 unk17; //reset_on_map_load
+    u8 unk18;
+    u8 unk19;
+    u8 unk1A;
+    u8 unk1B;
+    u8 unk1C;
+} D_8037E8E0;
+
+extern void func_80334540(Gfx **gdl, Mtx **mptr, Vtx **vptr);
+extern void func_802E67AC(void);
+extern void func_802E3BD0(s32 frame_buffer_indx);
+extern void func_802E67C4(void);
+extern void func_802E5F10(Gfx **gdl);
+extern void func_8030C2D4(Gfx **gdl, Mtx **mptr, Vtx **vptr);
+extern s32 func_80335134();
+extern void func_8032D474(Gfx **gdl, Mtx **mptr, Vtx **vptr);
+extern void gcpausemenu_draw(Gfx **gfx, Mtx **mtx, Vtx **vtx);
+extern void dummy_func_8025AFC0(Gfx **gfx, Mtx **mtx, Vtx **vtx);
+extern void gcdialog_draw(Gfx **gfx, Mtx **mtx, Vtx **vtx);
+extern void itemPrint_draw(Gfx **gdl, Mtx **mptr, Vtx **vptr);
+extern void printbuffer_draw(Gfx **gfx, Mtx **mtx, Vtx **vtx);
+
+// @recomp Patched to set the projection transform ID for the main projection.
+RECOMP_PATCH void func_802E39D0(Gfx **gdl, Mtx **mptr, Vtx **vptr, s32 framebuffer_idx, s32 arg4) {
+    // @recomp Set the perspective projection transform ID.
+    cur_perspective_projection_transform_id = PROJECTION_GAMEPLAY_TRANSFORM_ID;
+
+    Mtx *m_start = *mptr;
+    Vtx *v_start = *vptr;
+
+    scissorBox_SetForGameMode(gdl, framebuffer_idx);
+    D_8037E8E0.unkC = FALSE;
+    func_80334540(gdl, mptr, vptr);
+    if (!arg4) {
+        func_802E67AC();
+        func_802E3BD0(getActiveFramebuffer());
+        func_802E67C4();
+        func_802E5F10(gdl);
+    }
+    if (D_8037E8E0.game_mode == GAME_MODE_A_SNS_PICTURE
+        && D_8037E8E0.unk19 != 6
+        && D_8037E8E0.unk19 != 5
+        ) {
+        gctransition_draw(gdl, mptr, vptr);
+    }
+
+    if (D_8037E8E0.game_mode == GAME_MODE_8_BOTTLES_BONUS
+        || D_8037E8E0.game_mode == GAME_MODE_A_SNS_PICTURE
+        ) {
+        func_8030C2D4(gdl, mptr, vptr);
+    }
+
+    if (!game_is_frozen() && func_80335134()) {
+        func_8032D474(gdl, mptr, vptr);
+    }
+    
+    // @recomp Set the HUD projection transform ID.
+    cur_perspective_projection_transform_id = PROJECTION_HUD_TRANSFORM_ID;
+
+    // @recomp Create a new projection for HUD elements to prevent them from being drawn in world space.
+    // This helps with high framerates, as they no longer have to interpolate in space which would cause minor jittering.
+
+    // @recomp Create a backup of the viewport state. Avoid using viewport_backupState so that calls in the following
+    // functions don't override the saved state.
+    f32 saved_viewport_pos[3];
+    f32 saved_viewport_rot[3];
+    f32 saved_viewport_planes[4][4];
+    f32 saved_viewport_look[3];
+    MtxF saved_viewport_matrix;
+    viewport_getPosition_vec3f(saved_viewport_pos);
+    viewport_getRotation_vec3f(saved_viewport_rot);
+    viewport_getFrustumPlanes(saved_viewport_planes[0], saved_viewport_planes[1], saved_viewport_planes[2], saved_viewport_planes[3]);
+    viewport_getLookVector(saved_viewport_look);
+    saved_viewport_matrix = sViewportMatrix;
+
+    // @recomp Zero out the viewport position and rotation, then update the viewport.
+    viewport_setPosition_f3(0.0f, 0.0f, 0.0f);
+    viewport_setRotation_f3(0.0f, 0.0f, 0.0f);
+    viewport_update();
+    viewport_setRenderViewportAndPerspectiveMatrix(gdl, mptr);
+
+    gcpausemenu_draw(gdl, mptr, vptr);
+    if (!game_is_frozen()) {
+        dummy_func_8025AFC0(gdl, mptr, vptr);
+    }
+
+    gcdialog_draw(gdl, mptr, vptr);
+    if (!game_is_frozen()) {
+        itemPrint_draw(gdl, mptr, vptr);
+    }
+
+    printbuffer_draw(gdl, mptr, vptr);
+    
+    // @recomp Return to the normal gameplay projection transform ID.
+    cur_perspective_projection_transform_id = PROJECTION_GAMEPLAY_TRANSFORM_ID;
+
+    // @recomp Restore the saved viewport state.
+    viewport_setPosition_vec3f(saved_viewport_pos);
+    viewport_setRotation_vec3f(saved_viewport_rot);
+    viewport_setFrustumPlanes(saved_viewport_planes[0], saved_viewport_planes[1], saved_viewport_planes[2], saved_viewport_planes[3]);
+    ml_vec3f_copy(sViewportLookVector, saved_viewport_look);
+    sViewportMatrix = saved_viewport_matrix;
+
+    if (D_8037E8E0.game_mode != GAME_MODE_A_SNS_PICTURE
+        || D_8037E8E0.unk19 == 6
+        || D_8037E8E0.unk19 == 5
+        ) {
+        gctransition_draw(gdl, mptr, vptr);
+    }
+    finishFrame(gdl);
+    osWritebackDCache(m_start, sizeof(Mtx) * (*mptr - m_start));
+    osWritebackDCache(v_start, sizeof(Vtx) * (*vptr - v_start));
+
+    // @recomp Clear the perspective projection transform ID.
+    cur_perspective_projection_transform_id = 0;
+}
 
 // @recomp Patched to set the transform ID for the press start projection.
 RECOMP_PATCH Actor *chOverlayPressStart_draw(ActorMarker *marker, Gfx **gdl, Mtx **mptr, Vtx **vptr){
@@ -293,15 +332,12 @@ RECOMP_PATCH void func_803163A8(GcZoombox *this, Gfx **gfx, Mtx **mtx) {
 
     // @recomp Set the model transform ID. Skip interpolation when the camera does a cut.
     u32 prev_transform_id = cur_drawn_model_transform_id;
-    s32 prev_skip = cur_drawn_model_transform_id_skip_interpolation;
     cur_drawn_model_transform_id = ZOOMBOX_TRANSFORM_ID_START + this->portrait_id;
-    cur_drawn_model_transform_id_skip_interpolation = perspective_interpolation_skipped();
 
     modelRender_draw(gfx, mtx, sp50, sp5C, this->unk198 * sp34, sp38, this->model);
 
     // @recomp Reset the model transform ID.
     cur_drawn_model_transform_id = prev_transform_id;
-    cur_drawn_model_transform_id_skip_interpolation = prev_skip;
 }
 
 // @recomp Patched to set the zoombox portrait's model and ortho projection transform IDs.
@@ -318,12 +354,13 @@ RECOMP_PATCH void func_803164B0(GcZoombox *this, Gfx **gfx, Mtx **mtx, s32 arg3,
     func_80335D30(gfx);
 
     // @recomp Set the ortho projection transform ID for the portrait.
+    u32 prev_ortho_id = cur_ortho_projection_transform_id;
     cur_ortho_projection_transform_id = PROJECTION_PORTRAIT_TRANSFORM_ID_START + this->portrait_id;
 
     viewport_setRenderViewportAndOrthoMatrix(gfx, mtx);
 
-    // @recomp Clear the current ortho projection transform ID.
-    cur_ortho_projection_transform_id = 0;
+    // @recomp Reset the ortho projection transform ID.
+    cur_ortho_projection_transform_id = prev_ortho_id;
 
     mlMtxIdent();
     if (this->unk1A4_24) {
@@ -346,16 +383,7 @@ RECOMP_PATCH void func_803164B0(GcZoombox *this, Gfx **gfx, Mtx **mtx, s32 arg3,
     modelRender_setDepthMode(MODEL_RENDER_DEPTH_NONE);
     func_80344090(arg5, this->unk186, gfx);
     func_8033687C(gfx);
-
-    // @recomp Set the perpsective projection transform ID before restoring the game's normal projection.
-    // This is because zoomboxes are drawn in the normal gameplay projection.
-    u32 prev_projection_id = cur_perspective_projection_transform_id;
-    cur_perspective_projection_transform_id = PROJECTION_GAMEPLAY_TRANSFORM_ID;
-
     viewport_setRenderViewportAndPerspectiveMatrix(gfx, mtx);
-
-    // @recomp Reset the projection ID.
-    cur_perspective_projection_transform_id = prev_projection_id;
 
     // @recomp Pop the model matrix group.
     gEXPopMatrixGroup((*gfx)++, G_MTX_MODELVIEW);
