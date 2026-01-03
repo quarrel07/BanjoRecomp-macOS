@@ -27,8 +27,14 @@
 #undef Always
 #endif
 
-#include "recomp_ui.h"
-#include "recomp_input.h"
+#include "recompui/recompui.h"
+#include "recompui/program_config.h"
+#include "recompui/renderer.h"
+#include "recompui/config.h"
+#include "util/file.h"
+#include "recompinput/input_events.h"
+#include "recompinput/recompinput.h"
+#include "recompinput/profiles.h"
 #include "banjo_config.h"
 #include "banjo_sound.h"
 #include "banjo_render.h"
@@ -174,7 +180,7 @@ ultramodern::renderer::WindowHandle create_window(ultramodern::gfx_callbacks_t::
 }
 
 void update_gfx(void*) {
-    recomp::handle_events();
+    recompinput::handle_events();
 }
 
 static SDL_AudioCVT audio_convert;
@@ -216,7 +222,7 @@ void queue_samples(int16_t* audio_data, size_t sample_count) {
 
     // Convert the audio from 16-bit values to floats and swap the audio channels into the
     // swap buffer to correct for the address xor caused by endianness handling.
-    float cur_main_volume = banjo::get_main_volume() / 100.0f; // Get the current main volume, normalized to 0.0-1.0.
+    float cur_main_volume = static_cast<float>(recompui::config::sound::get_main_volume()) / 100.0f; // Get the current main volume, normalized to 0.0-1.0.
     for (size_t i = 0; i < sample_count; i += input_channels) {
         swap_buffer[i + 0 + duplicated_input_frames * input_channels] = audio_data[i + 1] * (0.5f / 32768.0f) * cur_main_volume;
         swap_buffer[i + 1 + duplicated_input_frames * input_channels] = audio_data[i + 0] * (0.5f / 32768.0f) * cur_main_volume;
@@ -520,15 +526,34 @@ void release_preload(PreloadContext& context) {
 #endif
 
 void enable_texture_pack(recomp::mods::ModContext& context, const recomp::mods::ModHandle& mod) {
-    banjo::renderer::enable_texture_pack(context, mod);
+    recompui::renderer::enable_texture_pack(context, mod);
 }
 
 void disable_texture_pack(recomp::mods::ModContext&, const recomp::mods::ModHandle& mod) {
-    banjo::renderer::disable_texture_pack(mod);
+    recompui::renderer::disable_texture_pack(mod);
 }
 
 void reorder_texture_pack(recomp::mods::ModContext&) {
-    banjo::renderer::trigger_texture_pack_update();
+    recompui::renderer::trigger_texture_pack_update();
+}
+
+void on_launcher_init(recompui::LauncherMenu *menu) {
+    auto game_options_menu = menu->init_game_options_menu(
+        supported_games[0].game_id,
+        supported_games[0].mod_game_id,
+        recompui::GameOptionsMenuLayout::Center
+    );
+    game_options_menu->add_default_options();
+
+    // TODO: Style launcher and get better background.
+    auto bg_element = menu->set_launcher_background_svg("banjkazoobg.svg");
+    bg_element->set_top(0.0f);
+    bg_element->set_bottom(0.0f);
+    bg_element->set_left(50.0f, recompui::Unit::Percent);
+    bg_element->set_height(1080.0f, recompui::Unit::Dp);
+    bg_element->set_width(1920.0f, recompui::Unit::Dp);
+    bg_element->set_translate_2D(-50.0f, 0.0f, recompui::Unit::Percent);
+    bg_element->set_opacity(0.25f);
 }
 
 #define REGISTER_FUNC(name) recomp::overlays::register_base_export(#name, name)
@@ -608,12 +633,15 @@ int main(int argc, char** argv) {
     reset_audio(48000);
 
     // Source controller mappings file
-    std::u8string controller_db_path = (banjo::get_program_path() / "recompcontrollerdb.txt").u8string();
+    std::u8string controller_db_path = (recompui::file::get_program_path() / "recompcontrollerdb.txt").u8string();
     if (SDL_GameControllerAddMappingsFromFile(reinterpret_cast<const char *>(controller_db_path.c_str())) < 0) {
         fprintf(stderr, "Failed to load controller mappings: %s\n", SDL_GetError());
     }
 
-    recomp::register_config_path(banjo::get_app_folder_path());
+    recompui::programconfig::set_program_name(banjo::program_name);
+    recompui::programconfig::set_program_id(banjo::program_id);
+    recompui::register_primary_font("Suplexmentary Comic NC.ttf", "Suplexmentary Comic NC");
+    recomp::register_config_path(recompui::file::get_app_folder_path());
 
     // Register supported games and patches
     for (const auto& game : supported_games) {
@@ -627,8 +655,8 @@ int main(int argc, char** argv) {
     REGISTER_FUNC(recomp_get_analog_cam_enabled);
     REGISTER_FUNC(recomp_get_camera_inputs);
     REGISTER_FUNC(recomp_get_bgm_volume);
-    REGISTER_FUNC(recomp_get_gyro_deltas);
-    REGISTER_FUNC(recomp_get_mouse_deltas);
+    // REGISTER_FUNC(recomp_get_gyro_deltas);
+    // REGISTER_FUNC(recomp_get_mouse_deltas);
     REGISTER_FUNC(recomp_get_inverted_axes);
     REGISTER_FUNC(recomp_get_analog_inverted_axes);
     recompui::register_ui_exports();
@@ -637,16 +665,22 @@ int main(int argc, char** argv) {
 
     banjo::register_bk_overlays();
     banjo::register_bk_patches();
+
     // Register extensions for two types: Props and ActorMarkers.
     recomputil::init_extended_object_data(2);
-    banjo::load_config();
+
+    recompinput::players::set_single_player_mode(true);
+
+    banjo::init_config();
+
+    recompui::register_launcher_init_callback(on_launcher_init);
 
     recomp::rsp::callbacks_t rsp_callbacks{
         .get_rsp_microcode = get_rsp_microcode,
     };
 
     ultramodern::renderer::callbacks_t renderer_callbacks{
-        .create_render_context = banjo::renderer::create_render_context,
+        .create_render_context = recompui::renderer::create_render_context,
     };
 
     ultramodern::gfx_callbacks_t gfx_callbacks{
@@ -662,15 +696,15 @@ int main(int argc, char** argv) {
     };
 
     ultramodern::input::callbacks_t input_callbacks{
-        .poll_input = recomp::poll_inputs,
-        .get_input = recomp::get_n64_input,
-        .set_rumble = recomp::set_rumble,
-        .get_connected_device_info = recomp::get_connected_device_info,
+        .poll_input = recompinput::poll_inputs,
+        .get_input = recompinput::profiles::get_n64_input,
+        .set_rumble = recompinput::set_rumble,
+        .get_connected_device_info = recompinput::get_connected_device_info,
     };
 
     ultramodern::events::callbacks_t thread_callbacks{
-        .vi_callback = recomp::update_rumble,
-        .gfx_init_callback = recompui::update_supported_options,
+        .vi_callback = recompinput::update_rumble,
+        .gfx_init_callback = nullptr,
     };
 
     ultramodern::error_handling::callbacks_t error_handling_callbacks{
