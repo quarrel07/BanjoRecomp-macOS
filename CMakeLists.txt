@@ -171,7 +171,6 @@ target_include_directories(BanjoRecompiled PRIVATE
     ${CMAKE_SOURCE_DIR}/lib/freetype-windows-binaries/include
     ${CMAKE_SOURCE_DIR}/lib/rt64/src/contrib/nativefiledialog-extended/src/include
     ${CMAKE_SOURCE_DIR}/lib/SlotMap
-    ${CMAKE_BINARY_DIR}/shaders
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -298,22 +297,6 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     target_link_libraries(BanjoRecompiled PRIVATE "-latomic -static-libstdc++" ${CMAKE_DL_LIBS} Threads::Threads)
 endif()
 
-set(RECOMP_FRONTEND_N64MODERNRUNTIME_PATH ${CMAKE_SOURCE_DIR}/lib/N64ModernRuntime)
-set(RECOMP_FRONTEND_RT64_PATH ${CMAKE_SOURCE_DIR}/lib/rt64)
-
-add_subdirectory(${CMAKE_SOURCE_DIR}/lib/RecompFrontend)
-
-target_link_libraries(BanjoRecompiled PRIVATE
-    PatchesLib
-    RecompiledFuncs
-    recompui
-    recompinput
-    librecomp
-    ultramodern
-    rt64
-    nfd
-)
-
 # TODO fix the rt64 CMake script so that this doesn't need to be duplicated here
 # For DXC
 set (DXC_COMMON_OPTS "-I${PROJECT_SOURCE_DIR}/src")
@@ -346,8 +329,21 @@ else()
     endif()
 endif()
 
-build_vertex_shader(BanjoRecompiled "shaders/InterfaceVS.hlsl" "shaders/InterfaceVS.hlsl")
-build_pixel_shader(BanjoRecompiled "shaders/InterfacePS.hlsl" "shaders/InterfacePS.hlsl")
+set(RECOMP_FRONTEND_N64MODERNRUNTIME_PATH ${CMAKE_SOURCE_DIR}/lib/N64ModernRuntime)
+set(RECOMP_FRONTEND_RT64_PATH ${CMAKE_SOURCE_DIR}/lib/rt64)
+
+add_subdirectory(${CMAKE_SOURCE_DIR}/lib/RecompFrontend)
+
+target_link_libraries(BanjoRecompiled PRIVATE
+    PatchesLib
+    RecompiledFuncs
+    recompui
+    recompinput
+    librecomp
+    ultramodern
+    rt64
+    nfd
+)
 
 # Embed all .nrm files in the "mods" directory
 file(GLOB NRM_FILES "${CMAKE_SOURCE_DIR}/mods/*.nrm")
