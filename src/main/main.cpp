@@ -40,6 +40,7 @@
 #include "banjo_sound.h"
 #include "banjo_support.h"
 #include "banjo_game.h"
+#include "banjo_launcher.h"
 #include "recomp_data.h"
 #include "ovl_patches.hpp"
 #include "theme.h"
@@ -82,7 +83,7 @@ ultramodern::gfx_callbacks_t::gfx_data_t create_gfx() {
     SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
 
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) > 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_JOYSTICK | SDL_INIT_HAPTIC) > 0) {
         exit_error("Failed to initialize SDL2: %s\n", SDL_GetError());
     }
 
@@ -151,7 +152,7 @@ ultramodern::renderer::WindowHandle create_window(ultramodern::gfx_callbacks_t::
     flags |= SDL_WINDOW_VULKAN;
 #endif
 
-    window = SDL_CreateWindow("Banjo: Recompiled", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1600, 960,  flags);
+    window = SDL_CreateWindow("Banjo: Recompiled", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1600, 900,  flags);
 
     if (window == nullptr) {
         exit_error("Failed to create window: %s\n", SDL_GetError());
@@ -546,19 +547,43 @@ void on_launcher_init(recompui::LauncherMenu *menu) {
         supported_games[0].mod_game_id,
         recompui::GameOptionsMenuLayout::Center
     );
+
     game_options_menu->add_default_options();
 
-    constexpr float banjo_apsect_ratio = 1.0434f;
-    constexpr float banjo_height = 500.0f;
+    for (auto option : game_options_menu->get_options()) {
+        option->set_justify_content(recompui::JustifyContent::FlexEnd);
+        option->set_border_radius(0);
 
-    // TODO: Style launcher and get better background.
-    auto bg_element = menu->set_launcher_background_svg("Banjo.svg");
-    bg_element->set_top(50.0f, recompui::Unit::Percent);
-    bg_element->set_left(50.0f, recompui::Unit::Percent);
-    bg_element->set_height(banjo_height, recompui::Unit::Dp);
-    bg_element->set_width(banjo_height * banjo_apsect_ratio, recompui::Unit::Dp);
-    bg_element->set_translate_2D(-50.0f, -50.0f, recompui::Unit::Percent);
-    bg_element->set_opacity(0.25f);
+        std::vector<recompui::Style *> hover_focus = {&option->hover_style, &option->focus_style};
+        for (auto style : hover_focus) {
+            style->set_background_color(recompui::theme::color::Transparent);
+        }
+    }
+
+    recompui::Element *menu_container = menu->get_menu_container();
+    menu_container->set_width(1440);
+    menu_container->unset_left();
+    menu_container->set_top(banjo::launcher_options_top_offset);
+    menu_container->set_bottom(-banjo::launcher_options_top_offset);
+    menu_container->set_right(50, recompui::Unit::Percent);
+    menu_container->set_translate_2D(50.0f, 0.0f, recompui::Unit::Percent);
+
+    game_options_menu->unset_left();
+    game_options_menu->set_bottom(50.0f, recompui::Unit::Percent);
+    game_options_menu->set_translate_2D(0.0f, 50.0f, recompui::Unit::Percent);
+    game_options_menu->set_right(banjo::launcher_options_right_position_start);
+
+    menu->remove_default_title();
+
+    recompui::ContextId context = recompui::get_current_context();
+    recompui::Label* title_label = context.create_element<recompui::Label>(menu, "Banjo: Recompiled", recompui::theme::Typography::Header1);
+    title_label->set_position(recompui::Position::Absolute);
+    title_label->set_top(banjo::launcher_options_title_offset);
+    title_label->set_right(50.0f, recompui::Unit::Percent);
+    title_label->set_translate_2D(50.0f, 0.0f, recompui::Unit::Percent);
+    title_label->set_color(recompui::theme::color::White);
+
+    banjo::launcher_animation_setup(menu, title_label);
 }
 
 #define REGISTER_FUNC(name) recomp::overlays::register_base_export(#name, name)
@@ -682,6 +707,7 @@ int main(int argc, char** argv) {
     banjo::init_config();
 
     recompui::register_launcher_init_callback(on_launcher_init);
+    recompui::register_launcher_update_callback(banjo::launcher_animation_update);
 
     recomp::rsp::callbacks_t rsp_callbacks{
         .get_rsp_microcode = get_rsp_microcode,
