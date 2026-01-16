@@ -92,6 +92,20 @@ ultramodern::gfx_callbacks_t::gfx_data_t create_gfx() {
     return {};
 }
 
+ultramodern::input::connected_device_info_t get_connected_device_info(int controller_num) {
+    if (recompinput::players::is_single_player_mode() || recompinput::players::get_player_is_assigned(controller_num)) {
+        return ultramodern::input::connected_device_info_t{
+            .connected_device = ultramodern::input::Device::Controller,
+            .connected_pak = ultramodern::input::Pak::RumblePak,
+        };
+    }
+
+    return ultramodern::input::connected_device_info_t{
+        .connected_device = ultramodern::input::Device::None,
+        .connected_pak = ultramodern::input::Pak::None,
+    };
+}
+
 #if defined(__gnu_linux__)
 #include "icon_bytes.h"
 
@@ -748,7 +762,7 @@ int main(int argc, char** argv) {
         .poll_input = recompinput::poll_inputs,
         .get_input = recompinput::profiles::get_n64_input,
         .set_rumble = recompinput::set_rumble,
-        .get_connected_device_info = recompinput::get_connected_device_info,
+        .get_connected_device_info = get_connected_device_info,
     };
 
     ultramodern::events::callbacks_t thread_callbacks{
