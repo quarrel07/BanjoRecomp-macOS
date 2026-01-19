@@ -171,6 +171,10 @@ RECOMP_EXPORT s32 bkrecomp_note_saving_enabled() {
     return recomp_get_note_saving_enabled();
 }
 
+RECOMP_EXPORT s32 bkrecomp_note_saving_active() {
+    return note_saving_enabled_cached;
+}
+
 void calculate_map_start_note_indices() {
     for (u32 map_id = 0; map_id < ARRLEN(map_note_data); map_id++) {
         MapNoteData* note_data = &map_note_data[map_id];
