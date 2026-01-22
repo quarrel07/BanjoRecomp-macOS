@@ -140,6 +140,27 @@ extern struct {
     u32         pad70_28 : 29;
 } D_80383010;
 
+typedef struct struct_1C_s {
+    u8 map;
+    s8 exit;
+    s16 x;   //0x2
+    char* str; //0x4
+    s8 unk8;
+}ParadeInfo;
+
+extern struct {
+    u8 state;
+    u8 indx;
+    u8 count;
+    s8 y_position;
+    s8 scroll_frame;
+    u8 unk5;
+    u8 parade_id;
+    u8 jiggyscore; //jiggy total
+    s32 unk8;
+    ParadeInfo* parade_element;
+}D_803830F0;
+
 extern u32 cur_pushed_text_transform_id;
 extern u32 cur_pushed_text_transform_origin;
 extern u32 cur_pushed_text_transform_skip_interpolation;
@@ -885,6 +906,19 @@ RECOMP_PATCH void gcpausemenu_printTotalsHeader(s32 page_id) {
 
     struct1Cs_1 *v0 = D_8036C58C + page_id;
     print_bold_overlapping(v0->x, D_80383010.unk8, -1.05f, v0->string);
+
+    // @recomp Clear the ID text.
+    cur_pushed_text_transform_id = 0;
+}
+
+// @recomp Patched to interpolate the character names during the parade.
+RECOMP_PATCH void gcparade_print(s32 index) {
+    ParadeInfo* v0 = D_803830F0.parade_element;
+
+    // @recomp Assign an ID for the totals text.
+    cur_pushed_text_transform_id = PARADE_PRINT_TRANSFORM_ID_START;
+
+    print_bold_overlapping(v0->x, D_803830F0.y_position, -1.2f, v0->str);
 
     // @recomp Clear the ID text.
     cur_pushed_text_transform_id = 0;
