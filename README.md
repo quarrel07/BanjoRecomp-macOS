@@ -14,6 +14,7 @@ Join the [N64: Recompiled Community Discord](https://discord.gg/AWZThJ4dPf) to d
 * [Features](#features)
   * [Plug and Play](#plug-and-play)
   * [Fully Intact N64 Effects](#fully-intact-n64-effects)
+  * [Faithful Audio](#faithful-audio)
   * [Easy-to-Use Menus](#easy-to-use-menus)
   * [High Framerate Support](#high-framerate-support)
   * [Widescreen and Ultrawide Support](#widescreen-and-ultrawide-support)
@@ -47,6 +48,9 @@ Simply provide your copy of the North American 1.0 version of the game in the ma
 
 #### Fully Intact N64 Effects
 All advanced graphical effects, such as the jigsaw puzzle screen transition and Bottles' Moving Picture Game are fully intact and have been adapted for widescreen and high framerates. Fine details such as the game's original mipmapping preserved with a high degree of accuracy.
+
+#### Faithful Audio
+Music and sounds are perfectly faithful to the original N64 version of game, with all audio processing intact and no popping or stuttering. Scenes that synchronize audio to visuals have their timings corrected to ensure they remain synchronized as they did on original hardware.
 
 #### Easy-to-Use Menus
 Gameplay settings, graphics settings, input mappings, and audio settings can all be configured with the in-game config menu. The menus can all be used with mouse, controller, or keyboard for maximum convenience.
