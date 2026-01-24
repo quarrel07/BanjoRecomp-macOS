@@ -153,11 +153,13 @@ RECOMP_PATCH void func_80350818(Gfx **gfx, Mtx **mtx, Vtx **vtx) {
 
                     // @recomp Set the model transform ID before drawing the lens flare.
                     cur_drawn_model_transform_id = LENS_FLARE_TRANSFORM_ID_START + LENS_FLARE_TRANSFORM_ID_COUNT * i;
+                    cur_drawn_model_skip_interpolation = perspective_interpolation_skipped();
 
                     modelRender_draw(gfx, mtx, spB8, spD0, temp_s2->unk4[i].unk14 * 0.25, NULL, D_80386170.unk8);
 
                     // @recomp Clear the model transform ID after drawing the lens flare.
                     cur_drawn_model_transform_id = 0;
+                    cur_drawn_model_skip_interpolation = FALSE;
                 }
             }
         }

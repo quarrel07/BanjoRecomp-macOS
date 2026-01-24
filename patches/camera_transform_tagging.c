@@ -201,6 +201,16 @@ void func_802BB4D8(f32 position[3], f32 rotation[3]);
 void func_802BEFB0(void);
 void func_802BBA84(void);
 
+f32 get_camera_skip_threshold() {
+    switch (map_get()) {
+    case MAP_94_CS_INTRO_SPIRAL_7:
+    case MAP_96_CS_END_BEACH_1:
+        return 50.0f;
+    default:
+        return 100.0f;
+    }
+}
+
 // @recomp Patched to detect camera type changes or sudden camera movements and skip perspective interpolation when they happen.
 RECOMP_PATCH void ncCamera_update(void) {
     f32 vpPos[3];
@@ -251,8 +261,7 @@ RECOMP_PATCH void ncCamera_update(void) {
         ml_vec3f_add(vpPosProjected, vpPosPrev, vpPosVel);
 
         f32 distToProjected = ml_vec3f_distance(vpPos, vpPosProjected);
-        const f32 SkipThreshold = (map_get() == MAP_94_CS_INTRO_SPIRAL_7) ? 50.0f : 100.0f;
-        if (distToProjected > SkipThreshold) {
+        if (distToProjected > get_camera_skip_threshold()) {
             ml_vec3f_clear(vpPosVel);
             skip_perspective_interpolation = TRUE;
         }
