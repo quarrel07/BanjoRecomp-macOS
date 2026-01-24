@@ -159,8 +159,8 @@ RECOMP_PATCH Actor *actor_draw(ActorMarker *marker, Gfx **gfx, Mtx **mtx, Vtx **
 
     // @recomp Check for the xmas tree model
     if (marker->modelId == ASSET_488_MODEL_XMAS_TREE) {
-        // @recomp Check that the lights are currently turning on / flickering
-        if (this->state == 2 || this->state == 3) {
+        // @recomp Check that the lights are currently turning on, flickering or turning off.
+        if (this->state == 2 || this->state == 3 || this->state == 5) {
             // @recomp Skip interpolation
             cur_drawn_model_skip_interpolation = TRUE;
         }
