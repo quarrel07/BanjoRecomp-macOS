@@ -1,7 +1,6 @@
 #include "patches.h"
 #include "core1/mlmtx.h"
 #include "functions.h"
-#include "enums.h"
 
 typedef struct {
     s32 cmd_0;
