@@ -66,11 +66,7 @@ Any aspect ratio is supported, with all effects modded to work correctly in wide
 #### Mod Support
 Install community made mods and texture packs! Mods can change any part of the game, including adding completely new features and content. You can install mods by simply dragging the mod files onto the game window before starting the game or by clicking the **Install Mods** button in the mod menu. Mods can be toggled in the mod menu, and some mods can be configured there as well.
 
-A Thunderstore mod hosting page is currently being set up for this project. In the meantime, you can find the mods showcased in the release trailer here:
-
-* [BK Jiggies of Time](https://github.com/Mr-Wiseguy/JiggiesOfTimeRecomp/releases/latest)
-* [BK Nostalgia 64](https://github.com/Mr-Wiseguy/Nostalgia64Recomp/releases/latest)
-* [BK Reloaded Texture Pack](https://evilgames.eu/texture-packs/bk-reloaded.htm)
+Many mods are available on the project's Thunderstore page: https://thunderstore.io/c/banjo-recompiled/. The Thunderstore mod manager/r2modman is not required or supported, so simply download the mods directly from the website.
 
 If you're interested in making mods for this project, check out [the mod template](https://github.com/BanjoRecomp/BKRecompModTemplate) and [the modding documentation](https://hackmd.io/fMDiGEJ9TBSjomuZZOgzNg). If you're interested in making texture packs, check out [the RT64 documentation](https://github.com/rt64/rt64/blob/main/TEXTURE-PACKS.md). You can also join the [N64: Recompiled Modding Discord server](https://discord.gg/Z8Nbm455D4).
 
@@ -116,6 +112,12 @@ Instead, you can change the game by installing mods. See the [mod support](#mod-
 
 #### Can you run this project as a portable application?
 Yes, if you place a file named `portable.txt` in the same folder as the executable then this project will run in portable mode. In portable mode, the save files, config files, and mods are placed in the same folder as the executable.
+
+#### Were the duplicate Mumbo token IDs in the original game fixed?
+Yes. The incorrect Mumbo tokens now use previously unused token IDs. This won't affect mods that replace levels.
+
+#### Does note saving have the same issue as the XBLA version where it collects notes during Bottles' puzzles and prevents you from getting 100% completion?
+No. Take has been care to ensure that notes are not saved during demos. 
 
 ## Known Issues
 * Overlays such as MSI Afterburner and other software such as Wallpaper Engine can cause performance issues with this project that prevent the game from rendering correctly. Disabling such software is recommended.
