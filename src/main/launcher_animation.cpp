@@ -249,7 +249,9 @@ void banjo::launcher_animation_setup(recompui::LauncherMenu *menu) {
     launcher_context.jiggy_shine_svg.scale_keyframes = {
         { 0.0f, 0.0f, 0.0f },
         { jiggy_shine_start, 0.0f, 0.0f },
-        { jiggy_shine_start + 0.01f, 1.0f, 1.0f },
+        { jiggy_shine_start, 1.0f, 1.0f },
+        { jiggy_shine_start + jiggy_shine_length, 1.0f, 1.0f },
+        { jiggy_shine_start + jiggy_shine_length, 0.0f, 0.0f },
     };
 
     launcher_context.jiggy_shine_svg.position_animation.interpolation_method = InterpolationMethod::Smootherstep;
