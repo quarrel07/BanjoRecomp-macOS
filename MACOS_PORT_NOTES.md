@@ -20,12 +20,24 @@ Stack reference (from the recomp architecture):
 ## 1. Building on macOS
 
 ### Prerequisites
-- Homebrew toolchain: `cmake` (3.20+), `ninja`, `llvm`/clang with C++20, and **`sdl2`** (`brew install sdl2`).
+- Homebrew toolchain: `cmake` (3.20+), `ninja`, `llvm`/clang with C++20, **`sdl2`**, and **`sdl3`**
+  (`brew install sdl2 sdl3`). SDL3 is needed at *package* time — modern Homebrew `sdl2` is the
+  sdl2-compat shim that loads SDL3 at runtime; see build gotcha #5.
 - Submodules initialized: `git submodule update --init --recursive`.
 - Recomp tooling present in the project root: `N64Recomp`, `RSPRecomp`, `file_to_c` (built from N64Recomp),
-  and the decompressed ROM.
+  and the decompressed ROM. **`N64Recomp`/`RSPRecomp` must be built from the `quarrel07/N64Recomp`
+  fork** (branch `macos-highdpi`) — upstream's copy lacks the `teq` instruction handler and dies with
+  `Unhandled instruction: teq` while recompiling `game_draw`. The copy vendored inside
+  `lib/N64ModernRuntime/N64Recomp` is *not* that fork — don't build the tools from it.
 - **Full Xcode** (not just Command Line Tools) is required for the app icon step — it uses `actool`
   (see §4). Xcode 26+ for Liquid Glass `.icon` support.
+
+> **Known-good toolchain (last verified 2026-07-03):** Homebrew `llvm` 22.x (its `clang` at
+> `$(brew --prefix llvm)/bin/clang` — needed for the MIPS-target `patches/` build, see gotcha #4),
+> Apple clang / Xcode 26 for the app target, macOS 26.5, SDL2 (sdl2-compat) 2.x + SDL3 3.4.x. These
+> submodule pins build green with an *older* toolchain than what ships today, so most breakage below is
+> "compiler/SDK newer than upstream tested" — record the versions you verified against when you touch this.
+> **Do not build under a path containing spaces** (see gotcha #3).
 
 ### Preparing the decompressed ROM
 The recompiler consumes `banjo.us.v10.decompressed.z64` — your Banjo-Kazooie ROM with its overlays
@@ -78,6 +90,62 @@ calls `find_package(SDL2)`), already patched there to set the Homebrew paths on 
 The original bundle icon used `iconutil` on a hand-built **2-entry** iconset (just `icon_512x512.png`
 and `icon_512x512@2x.png`, both copies of one PNG). That's an outdated approach and produced a
 non-conforming icon on modern macOS. Replaced with an `actool` pipeline — see §4.
+
+### Build gotcha #3 — spaces in the build path (`.../Repo Clones/...`)
+**Symptom (two failures, same root cause):**
+1. Shader compile dies: `/bin/sh: DYLD_LIBRARY_PATH=/…/Repo Clones/…: No such file or directory`.
+2. The `.app` builds but has **no `Contents/Info.plist`** → generic icon, and `codesign` sees a
+   malformed bundle. (`ninja -t commands` shows no rule ever copies `Info.plist`.)
+
+**Why:** both upstream mechanisms are space-fragile.
+- The DXC/spirv-cross commands are built as a bare `"DYLD_LIBRARY_PATH=…" dxc-macos` token. `/bin/sh`
+  only treats an **unquoted** `NAME=value` word as an env assignment; once the path contains a space
+  CMake must quote the whole token, so `/bin/sh` tries to *execute* the literal string.
+- CMake's built-in `MACOSX_BUNDLE_INFO_PLIST` copy silently fails to emit its build rule when
+  `CMAKE_BINARY_DIR` contains a space.
+
+**Fixes** (all keep working with or without spaces, so they harden the fork for any user):
+- Wrap the shader tools with `${CMAKE_COMMAND} -E env "DYLD_LIBRARY_PATH=…" -- <tool>` instead of a
+  bare prefix — in **both** `CMakeLists.txt` (top level) and `rt64/CMakeLists.txt`.
+- Copy `Info.plist` explicitly in `.github/macos/apple_bundle.cmake`'s POST_BUILD (first step), and
+  make `Info.plist.in` use `@VAR@` placeholders filled by `configure_file` (the `${MACOSX_BUNDLE_*}`
+  form relied on the same broken built-in substitution, so id/name/version/icon were leaking through
+  literally — see §4).
+
+**Simplest prevention: don't build under a spaced path.** The local working folder was renamed
+`Repo Clones` → `Repo-Clones` for exactly this reason. The code fixes remain as defence-in-depth.
+
+### Build gotcha #4 — newer clang/SDK than the submodule pins expect
+Three independent failures, all "the toolchain moved on since upstream last built this":
+- **`patches/` needs a real MIPS-target clang.** The `patches/Makefile` cross-compiles to `-target
+  mips`; Apple's `/usr/bin/clang` has no MIPS backend (`Unknown command line argument
+  '-mgpopt'` / `'-mips-ssection-threshold=0'`). Build it with Homebrew LLVM's clang — pass
+  `-DPATCHES_C_COMPILER=$(brew --prefix llvm)/bin/clang` at configure. Also, newer clang promotes
+  `-Wincompatible-pointer-types` to an error in the decomp headers; the Makefile now adds
+  `-Wno-error=incompatible-pointer-types`.
+- **`hlslpp` uses `labs()` without `<cstdlib>`.** `contrib/hlslpp/.../scalar.h` used to get the
+  declaration transitively; on newer libc++ it doesn't → `use of undeclared identifier 'labs'`.
+  Force-included via `-include cstdlib` (C++ only) in `rt64/CMakeLists.txt`.
+- **AppleClang ≠ "Clang".** `rt64/CMakeLists.txt` gates warning-suppression on
+  `CMAKE_CXX_COMPILER_ID STREQUAL "Clang"`, but Xcode's compiler reports **`AppleClang`**, so that
+  whole block never applied. The `-include cstdlib` fix is deliberately placed **outside** that block
+  (`if (APPLE)`), and scoped to CXX via a generator expression so it doesn't hit C files like `miniz.c`.
+
+### Build gotcha #5 — Homebrew `sdl2` is the sdl2-compat shim → "Failed loading SDL3 library"
+**Symptom:** the `.app` builds, `fixup_bundle` succeeds, but on launch it aborts in
+`libSDL2-2.0.0.dylib` `dllinit` with **"Failed loading SDL3 library."**
+
+**Why:** modern Homebrew `sdl2` is **sdl2-compat**, a thin shim that `dlopen`s the real SDL3 at
+runtime (`@loader_path/libSDL3.dylib`). `BundleUtilities::fixup_bundle` only follows **load commands**,
+never a `dlopen`, so it bundles the shim but never SDL3. (Confirm with
+`strings …/libSDL2-2.0.0.dylib | grep sdl2-compat`.) An old build linked against *real* SDL2 works;
+this appears after a `brew upgrade` migrates the box to sdl2-compat.
+
+**Fix:** bundle the real SDL3 next to the shim (= `@loader_path`). `apple_bundle.cmake` resolves it at
+configure time (`brew --prefix sdl3`) and a POST_BUILD helper (`.github/macos/bundle_sdl3.cmake`)
+copies it in as `libSDL3.dylib` **before** codesign (SDL3 is self-contained → only system frameworks,
+so a plain copy works; `--deep` codesign re-signs it). NB: copy the **resolved real file**, not the
+Homebrew symlink — copying the symlink leaves a dangling link that also breaks codesign.
 
 ---
 
@@ -165,6 +233,37 @@ CoreFoundation links transitively (via SDL/Metal); no extra `-framework` needed.
 `defaults read <bundleid> ApplePressAndHoldEnabled` → `0` after launch. (An alternative, more
 invasive fix is to call `SDL_StopTextInput()` whenever not in a UI text field, but the per-app
 default is simpler and bulletproof.)
+
+## 3.5. Input — key-binding display shows "?" for many keys
+
+**Symptom:** in the controls menu, binding a control to anything that isn't a letter, digit, arrow, or
+F-key shows the unknown-input **"?"** icon — punctuation (`/ . , ; ' - = ` [ ] \`) and every modifier
+except Shift (Control, Option, Command).
+
+**Why:** the *capture* is fine — `input_events.cpp` stores whatever `SDL_Scancode` you press. The gap
+is in the *display* table `scancode_codepoints` in `recompinput/src/input_types.cpp`: it's a hand-kept
+scancode→glyph map that upstream only populated with A–Z, 0–9, arrows, F-keys, and a few named
+specials (incl. L/R Shift). Any scancode not in it falls through to `unknown_device_input`
+(`"UNKNOWN"`), which the binding button renders as `icons/Question.svg`.
+
+**Fix** (in `quarrel07/RecompFrontend`, all in the display map):
+- **Punctuation:** map the missing scancodes to promptfont's plain-ASCII glyphs (`PF_ASCII_SLASH`
+  etc.) — the font has full ASCII, so no font change needed.
+- **Modifiers:** add `LCTRL/RCTRL → PF_KEYBOARD_CONTROL`, and — because this is the macOS build —
+  `LALT/RALT → ⌥` and `LGUI/RGUI → ⌘` using dedicated Mac glyphs rather than the generic Alt/Super.
+
+**The ⌥/⌘ glyphs (font change, main repo).** promptfont had no Option/Command glyphs, so this fork
+**extends** the font rather than editing it: two new glyphs were added at their real Unicode codepoints
+— `⌥` U+2325, `⌘` U+2318 (the "place of interest sign") — declared as `PF_KEYBOARD_OPTION` /
+`PF_KEYBOARD_COMMAND` in `recompinput/.../promptfont.h`, leaving stock Alt (U+2428) / Super (U+242A)
+intact. The extended TTF is `assets/promptfont/promptfont.ttf`.
+- ⚠️ **Keep the font's internal family name `PromptFont`.** RmlUi matches the binding text's
+  `font-family: "promptfont"` against the font's *internal* name, not the filename. A font editor that
+  renames the family (e.g. to "PromptFontExtended") makes **every** key glyph fail to resolve, not just
+  the new ones. Normalize name IDs 1/4/6 back to `PromptFont` after editing.
+- No system-font free ride: the binding text is pinned to `font-family: "promptfont"` and RmlUi's only
+  registered fallback face is NotoEmoji (`ui_state.cpp`), which lacks these codepoints — so an
+  unmapped/undrawn glyph is **tofu**, not a graceful fallback. The glyph has to live in promptfont.
 
 ## 4. App icon — grey box → Liquid Glass
 
