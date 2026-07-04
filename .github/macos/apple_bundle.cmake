@@ -1,13 +1,44 @@
 # Define the path to the entitlements file
 set(ENTITLEMENTS_FILE ${CMAKE_SOURCE_DIR}/.github/macos/entitlements.plist)
 
+# Locate the real SDL3 dylib so it can be bundled alongside the SDL2 shim (see the SDL3 copy step in
+# the POST_BUILD block below). Modern Homebrew's `sdl2` formula is actually sdl2-compat — a thin shim
+# that dlopens the real SDL3 at runtime (`@loader_path/libSDL3.dylib`). fixup_bundle only follows load
+# commands, never a dlopen, so it bundles the shim but never SDL3, and the app aborts on launch with
+# "Failed loading SDL3 library." Resolve SDL3 here at configure time so the copy doesn't depend on
+# `brew` being on PATH during the build.
+find_program(BREW_EXECUTABLE brew)
+if (BREW_EXECUTABLE)
+    execute_process(COMMAND ${BREW_EXECUTABLE} --prefix sdl3
+                    OUTPUT_VARIABLE SDL3_PREFIX OUTPUT_STRIP_TRAILING_WHITESPACE
+                    ERROR_QUIET RESULT_VARIABLE SDL3_PREFIX_RESULT)
+    if (SDL3_PREFIX_RESULT EQUAL 0 AND EXISTS "${SDL3_PREFIX}/lib/libSDL3.dylib")
+        set(SDL3_DYLIB "${SDL3_PREFIX}/lib/libSDL3.dylib")
+    endif()
+endif()
+if (NOT SDL3_DYLIB)
+    message(WARNING "SDL3 dylib not found via Homebrew. If the Homebrew sdl2 in use is the sdl2-compat "
+                    "shim, the bundled .app will abort on launch with \"Failed loading SDL3 library.\" "
+                    "Install it with `brew install sdl3`.")
+endif()
+
+# Bundle identity — single source of truth. Used both for the target's MACOSX_BUNDLE_* properties and
+# for configuring Info.plist below. We can't rely on CMake's built-in MACOSX_BUNDLE_INFO_PLIST
+# substitution (it silently breaks when the build path contains spaces — see the explicit Info.plist
+# copy in the POST_BUILD block), so Info.plist.in uses @VAR@ placeholders that configure_file fills
+# from these variables.
+set(MACOSX_BUNDLE_BUNDLE_NAME "BanjoRecompiled")
+set(MACOSX_BUNDLE_GUI_IDENTIFIER "com.github.Banjorecompiled")
+set(MACOSX_BUNDLE_BUNDLE_VERSION "1.0")
+set(MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0")
+
 # Set bundle properties
 set_target_properties(BanjoRecompiled PROPERTIES
         MACOSX_BUNDLE TRUE
-        MACOSX_BUNDLE_BUNDLE_NAME "BanjoRecompiled"
-        MACOSX_BUNDLE_GUI_IDENTIFIER "com.github.Banjorecompiled"
-        MACOSX_BUNDLE_BUNDLE_VERSION "1.0"
-        MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0"
+        MACOSX_BUNDLE_BUNDLE_NAME "${MACOSX_BUNDLE_BUNDLE_NAME}"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "${MACOSX_BUNDLE_GUI_IDENTIFIER}"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${MACOSX_BUNDLE_BUNDLE_VERSION}"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${MACOSX_BUNDLE_SHORT_VERSION_STRING}"
         MACOSX_BUNDLE_ICON_FILE "appicon"
         MACOSX_BUNDLE_INFO_PLIST ${CMAKE_BINARY_DIR}/Info.plist
         XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "-"
@@ -71,8 +102,20 @@ endif()
 
 # Post-build steps for macOS bundle
 add_custom_command(TARGET BanjoRecompiled POST_BUILD
+    # Copy the Info.plist into the bundle explicitly. CMake's MACOSX_BUNDLE_INFO_PLIST wiring does not
+    # emit a copy rule here (empirically no Contents/Info.plist edge is generated — this reproduces when
+    # the build path contains spaces, e.g. ".../Repo Clones/..."), leaving the bundle with no Info.plist:
+    # macOS then can't read CFBundleIconName/CFBundleIconFile so the app shows a generic icon, and the
+    # bundle is malformed for codesign. Do it first so every step below sees a well-formed bundle.
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/Info.plist $<TARGET_BUNDLE_DIR:BanjoRecompiled>/Contents/Info.plist
+
     # Copy and fix frameworks first
     COMMAND ${CMAKE_COMMAND} -D CMAKE_BUILD_TYPE=$<CONFIG> -D CMAKE_GENERATOR=${CMAKE_GENERATOR} -P ${CMAKE_SOURCE_DIR}/.github/macos/fixup_bundle.cmake
+
+    # Bundle the real SDL3 next to the SDL2 shim (= @loader_path) so sdl2-compat can dlopen it. SDL3 is
+    # self-contained (only system frameworks), so a plain copy is enough; the --deep codesign below
+    # re-signs it. The helper no-ops (with a warning) if SDL3 wasn't found at configure time.
+    COMMAND ${CMAKE_COMMAND} -D SDL3_DYLIB=${SDL3_DYLIB} -D FRAMEWORKS_DIR=$<TARGET_BUNDLE_DIR:BanjoRecompiled>/Contents/Frameworks -P ${CMAKE_SOURCE_DIR}/.github/macos/bundle_sdl3.cmake
 
     # Copy all resources
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets ${CMAKE_BINARY_DIR}/temp_assets

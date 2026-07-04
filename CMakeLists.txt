@@ -320,7 +320,11 @@ if (${WIN32})
 else()
     if (APPLE)
         # Apple's binary is universal, so it'll work on both x86_64 and arm64
-        set (DXC "DYLD_LIBRARY_PATH=${PROJECT_SOURCE_DIR}/lib/rt64/src/contrib/dxc/lib/arm64" "${PROJECT_SOURCE_DIR}/lib/rt64/src/contrib/dxc/bin/arm64/dxc-macos")
+        # Invoked via `cmake -E env` (not a bare "VAR=value" prefix) so this keeps working when the
+        # source tree is under a path containing spaces: /bin/sh only recognizes an unquoted NAME=value
+        # word as an environment assignment, and CMake must fully quote this token once it contains a
+        # space, which makes /bin/sh try to execute the literal string instead.
+        set (DXC ${CMAKE_COMMAND} -E env "DYLD_LIBRARY_PATH=${PROJECT_SOURCE_DIR}/lib/rt64/src/contrib/dxc/lib/arm64" -- "${PROJECT_SOURCE_DIR}/lib/rt64/src/contrib/dxc/bin/arm64/dxc-macos")
         if(CMAKE_SIZEOF_VOID_P EQUAL 8 AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|AMD64")
             set(SPIRVCROSS "DYLD_LIBRARY_PATH=${PROJECT_SOURCE_DIR}/lib/rt64/src/contrib/spirv-cross/lib/x64" "${PROJECT_SOURCE_DIR}/lib/rt64//src/contrib/spirv-cross/bin/x64/spirv-cross")
         else()

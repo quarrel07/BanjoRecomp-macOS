@@ -3,17 +3,17 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>${MACOSX_BUNDLE_BUNDLE_NAME}</string>
+    <string>@MACOSX_BUNDLE_BUNDLE_NAME@</string>
     <key>CFBundleIdentifier</key>
-    <string>${MACOSX_BUNDLE_GUI_IDENTIFIER}</string>
+    <string>@MACOSX_BUNDLE_GUI_IDENTIFIER@</string>
     <key>CFBundleVersion</key>
-    <string>${MACOSX_BUNDLE_BUNDLE_VERSION}</string>
+    <string>@MACOSX_BUNDLE_BUNDLE_VERSION@</string>
     <key>CFBundleShortVersionString</key>
-    <string>${MACOSX_BUNDLE_SHORT_VERSION_STRING}</string>
+    <string>@MACOSX_BUNDLE_SHORT_VERSION_STRING@</string>
     <key>CFBundleExecutable</key>
     <string>BanjoRecompiled</string>
     <key>CFBundleIconFile</key>
-    <string>${MACOSX_BUNDLE_ICON_FILE}</string>
+    <string>appicon</string>
     <key>CFBundleIconName</key>
     <string>appicon</string>
     <key>LSApplicationCategoryType</key>
