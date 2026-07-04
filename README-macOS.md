@@ -63,11 +63,13 @@ Like the upstream project, **no build here contains game assets** — you always
 legally-obtained ROM at run time (the app prompts you for it on first launch).
 
 - **Prebuilt binary:** download the latest `BanjoRecompiled-vX.Y.Z-macOS-arm64.zip` from the
-  [Releases page](https://github.com/quarrel07/BanjoRecomp-macOS-HighDPI/releases), unzip, and move
+  [Releases page](https://github.com/quarrel07/BanjoRecomp-macOS/releases), unzip, and move
   `BanjoRecompiled.app` to your Applications folder. Apple Silicon only. The build is unsigned, so the
   first time you open it, right-click the app → **Open** to get past Gatekeeper.
-- **Versioning:** releases track upstream — `vX.Y.Z-macos` is the macOS HighDPI build of upstream
-  `vX.Y.Z`. When upstream ships a new version, this fork updates to match after verifying it builds.
+- **Versioning:** the macOS fork versions **independently** — `vX.Y.Z-macos` is the fork's own version,
+  and each release notes which upstream BanjoRecomp version it's built from (e.g. **v1.1.0-macos** is
+  based on upstream 1.0.1). The fork number bumps when it ships macOS-only changes; it also re-bases on
+  new upstream releases after verifying they build.
 - **No CI / no secrets:** this repo contains no game assets and links to no private repos. The
   prebuilt binary is built locally (from a ROM the maintainer owns) and attached to the release; there
   is no build workflow that stores or fetches a ROM.

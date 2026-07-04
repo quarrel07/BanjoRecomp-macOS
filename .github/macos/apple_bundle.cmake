@@ -29,8 +29,10 @@ endif()
 # from these variables.
 set(MACOSX_BUNDLE_BUNDLE_NAME "BanjoRecompiled")
 set(MACOSX_BUNDLE_GUI_IDENTIFIER "com.github.Banjorecompiled")
-set(MACOSX_BUNDLE_BUNDLE_VERSION "1.0")
-set(MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0")
+# macOS fork version — independent of upstream's number (this build = macOS fork 1.1.0, based on
+# upstream BanjoRecomp 1.0.1). Bump on macOS-fork-visible changes; note the upstream base in the notes.
+set(MACOSX_BUNDLE_BUNDLE_VERSION "1.1.0")
+set(MACOSX_BUNDLE_SHORT_VERSION_STRING "1.1.0")
 
 # Set bundle properties
 set_target_properties(BanjoRecompiled PROPERTIES
